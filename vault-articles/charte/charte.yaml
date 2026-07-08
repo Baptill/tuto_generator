@@ -1,14 +1,45 @@
 version: 1
 nom: "Charte pilote 2026"
+
 couleurs:
-  primaire: "#1A2B4C"
-  secondaire: "#E85D2A"
-  texte: "#222222"
+  primaire: "#1A1A2E"
+  secondaire: "#16213E"
+  texte: "#333333"
   fond: "#FFFFFF"
 polices:
-  titres: "Georgia"
-  corps: "Calibri"
+  titre_1:
+    famille: "Inter"
+    taille_pt: 26
+    gras: true
+    text_alignement: "center"
+  titre_2:
+    famille: "Inter"
+    taille_pt: 16
+    gras: true
+    text_alignement: "left"
+  corps:
+    famille: "Inter"
+    taille_pt: 11
+    text_alignement: "left"
+  legende:
+    famille: "Inter"
+    taille_pt: 9
+    couleur: "#888888"
+    text_alignement: "center"
+  prerequis_label:
+    famille: "Inter"
+    taille_pt: 11
+    italique: false
+    souligne: true
+    text_alignement: "left"
+  prerequis_item:
+    famille: "Inter"
+    taille_pt: 11
+    text_alignement: "left"
+
 logo: "logo.png"
+background: "background.png"
+
 espacements:
-  interligne: 1.15
-  marge_mm: 20
+  interligne: 1.25
+  marge_mm: 22

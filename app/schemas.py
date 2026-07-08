@@ -12,6 +12,7 @@ from typing import Annotated, Literal, Union
 from pydantic import BaseModel, Field
 
 HauteurSection = Literal[1, 2, 3, 4]
+LayoutSection = Literal["texte-seul", "image-dessus-texte", "image-gauche-texte", "texte-image-droite"]
 StyleEncadre = Literal["astuce", "attention", "info"]
 StatutArticle = Literal["brouillon", "valide", "publie"]
 
@@ -43,6 +44,7 @@ class Section(BaseModel):
     hauteur: HauteurSection = Field(
         description="Unités de hauteur occupées sur une page divisée en 4 (voir CLAUDE.md §3)."
     )
+    layout: LayoutSection = "texte-seul"
     blocs: list[Bloc]
 
 
@@ -64,6 +66,7 @@ class Article(BaseModel):
     resume: str | None = None
     auteur: str
     sections: list[Section]
+    prerequis: list[str] = Field(default_factory=list)
     metadonnees_seo: MetadonneesSeo = Field(default_factory=MetadonneesSeo)
     liens_internes: list[str] = Field(default_factory=list)
 
@@ -119,9 +122,30 @@ class Couleurs(BaseModel):
     fond: str
 
 
+class StyleTypo(BaseModel):
+    """Propriétés typographiques d'un style nommé Word.
+
+    `gras`, `italique` et `souligne` sont cumulables : les trois à true
+    donnent du texte gras + italique + souligné.
+    `couleur` est un code hex optionnel ; si absent, la couleur sémantique
+    de la charte s'applique (primaire pour les titres, texte pour le corps).
+    """
+    famille: str
+    taille_pt: float
+    gras: bool = False
+    italique: bool = False
+    souligne: bool = False
+    couleur: str | None = None
+    text_alignement: Literal["left", "center", "right", "justify"] = "left"
+
+
 class Polices(BaseModel):
-    titres: str
-    corps: str
+    titre_1: StyleTypo
+    titre_2: StyleTypo
+    corps: StyleTypo
+    legende: StyleTypo
+    prerequis_label: StyleTypo
+    prerequis_item: StyleTypo
 
 
 class Espacements(BaseModel):

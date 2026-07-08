@@ -6,11 +6,15 @@ proprement avec un message explicite plutôt qu'une trace confuse.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 SOFFICE_BIN_CANDIDATES = ["soffice", "libreoffice"]
+
+VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
+CHARTE_FONTS_DIR = VAULT_ROOT / "charte" / "fonts"
 
 
 class PdfConversionError(Exception):
@@ -50,7 +54,14 @@ def convert_to_pdf(docx_path: Path, out_dir: Path, timeout: int = 120) -> Path:
         str(out_dir),
         str(docx_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    env = os.environ.copy()
+    if CHARTE_FONTS_DIR.is_dir():
+        # SAL_FONTS_PATH indique à LibreOffice un répertoire de polices
+        # supplémentaires — utile sur le serveur Linux où les polices de la
+        # charte ne sont pas installées au niveau système.
+        existing = env.get("SAL_FONTS_PATH", "")
+        env["SAL_FONTS_PATH"] = f"{CHARTE_FONTS_DIR}:{existing}" if existing else str(CHARTE_FONTS_DIR)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
     if result.returncode != 0:
         raise PdfConversionError(
             f"Échec de la conversion PDF pour {docx_path.name} : "

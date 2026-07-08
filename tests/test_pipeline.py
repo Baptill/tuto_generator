@@ -14,6 +14,15 @@ def _section(id_: str, hauteur: int) -> Section:
     return Section(id=id_, titre=id_, hauteur=hauteur, blocs=[])
 
 
+def _all_paragraphs(doc):
+    """Itère sur tous les paragraphes du doc, y compris dans les cellules de tableau."""
+    yield from doc.paragraphs
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                yield from cell.paragraphs
+
+
 def test_pagination_respects_grid():
     sections = [_section("a", 1), _section("b", 1), _section("c", 2), _section("d", 4), _section("e", 3)]
     pages = paginate(sections)
@@ -38,7 +47,7 @@ def test_generate_sample_article_end_to_end():
 
     doc = Document(str(result.docx_path))
     assert len(doc.inline_shapes) == 3  # 3 images, cf. DoD Étape 1
-    styles_used = {p.style.name for p in doc.paragraphs}
+    styles_used = {p.style.name for p in _all_paragraphs(doc)}
     assert {"Titre 1", "Titre 2", "Corps", "Legende", "Encadre Astuce", "Encadre Attention", "Encadre Info"} <= styles_used
 
     page_breaks = sum(

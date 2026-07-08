@@ -3,57 +3,34 @@
 Voir CLAUDE.md §3 (sections modulaires, styles nommés) et §4 (modèle de
 données). Règle d'or : ce module lit `content.yaml`, jamais l'inverse.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from docx.enum.text import WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.shared import Mm, RGBColor
+
+_ALIGNEMENTS = {
+    "left": WD_ALIGN_PARAGRAPH.LEFT,
+    "center": WD_ALIGN_PARAGRAPH.CENTER,
+    "right": WD_ALIGN_PARAGRAPH.RIGHT,
+    "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+}
 from docxtpl import DocxTemplate
 
-from app.markdown_lite import add_markdown_lite
+from app.layouts import build_section_subdoc
 from app.pagination import paginate
-from app.schemas import Article, BlocEncadre, BlocImage, BlocParagraphe, Charte, Section, TemplateConfig
+from app.schemas import Article, Charte, TemplateConfig
 
 STYLE_TITRE_1 = "Titre 1"
 STYLE_TITRE_2 = "Titre 2"
 STYLE_CORPS = "Corps"
 STYLE_LEGENDE = "Legende"
-ENCADRE_STYLES = {
-    "astuce": "Encadre Astuce",
-    "attention": "Encadre Attention",
-    "info": "Encadre Info",
-}
 
 
 class RenderError(Exception):
     pass
-
-
-def _build_section_subdoc(tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int):
-    subdoc = tpl.new_subdoc()
-    subdoc.add_paragraph(section.titre, style=STYLE_TITRE_2)
-
-    for bloc in section.blocs:
-        if isinstance(bloc, BlocParagraphe):
-            add_markdown_lite(subdoc, bloc.texte, style=STYLE_CORPS)
-        elif isinstance(bloc, BlocEncadre):
-            style_name = ENCADRE_STYLES[bloc.style]
-            add_markdown_lite(subdoc, bloc.texte, style=style_name, list_style=style_name)
-        elif isinstance(bloc, BlocImage):
-            image_path = article_dir / bloc.fichier
-            if not image_path.is_file():
-                raise RenderError(f"Section '{section.id}' : image introuvable '{image_path}'.")
-            width_mm = bloc.largeur_mm or largeur_mm_defaut
-            p = subdoc.add_paragraph()
-            run = p.add_run()
-            run.add_picture(str(image_path), width=Mm(width_mm))
-            if bloc.legende:
-                subdoc.add_paragraph(bloc.legende, style=STYLE_LEGENDE)
-        else:  # pragma: no cover - garde-fou si le schéma évolue
-            raise RenderError(f"Type de bloc non géré : {bloc!r}")
-
-    return subdoc
 
 
 def _build_page_break_subdoc(tpl: DocxTemplate):
@@ -63,13 +40,27 @@ def _build_page_break_subdoc(tpl: DocxTemplate):
     return subdoc
 
 
+def _apply_style_typo(style, stylo, couleur_fallback: RGBColor) -> None:
+    """Applique un StyleTypo de la charte à un style nommé Word."""
+    from docx.shared import Pt
+
+    font = style.font
+    font.name = stylo.famille
+    font.size = Pt(stylo.taille_pt)
+    font.bold = stylo.gras
+    font.italic = stylo.italique
+    font.underline = stylo.souligne
+    couleur_hex = (stylo.couleur or "").lstrip("#").upper()
+    font.color.rgb = RGBColor.from_string(couleur_hex) if couleur_hex else couleur_fallback
+    style.paragraph_format.alignment = _ALIGNEMENTS[stylo.text_alignement]
+
+
 def _apply_charte(tpl: DocxTemplate, charte: Charte) -> None:
-    """Applique couleurs/polices/espacements de la charte aux styles nommés du
-    document rendu (voir CLAUDE.md §3, « Template Word : styles nommés »).
+    """Applique toutes les propriétés typographiques et d'espacement de la
+    charte aux styles nommés du document rendu.
 
     Les couleurs sémantiques des encadrés (astuce/attention/info) restent
-    fixes dans le template : elles portent un sens indépendant de la marque,
-    contrairement aux couleurs de titres/corps qui, elles, suivent la charte.
+    fixes dans le template : elles portent un sens indépendant de la marque.
     """
     document = tpl.docx
     styles = document.styles
@@ -77,21 +68,33 @@ def _apply_charte(tpl: DocxTemplate, charte: Charte) -> None:
     color_texte = RGBColor.from_string(charte.couleurs.texte.lstrip("#").upper())
 
     style_names = {s.name for s in styles}
+    p = charte.polices
 
-    for name in (STYLE_TITRE_1, STYLE_TITRE_2):
-        if name in style_names:
-            font = styles[name].font
-            font.name = charte.polices.titres
-            font.color.rgb = color_primaire
+    if STYLE_TITRE_1 in style_names:
+        _apply_style_typo(styles[STYLE_TITRE_1], p.titre_1, color_primaire)
+
+    if STYLE_TITRE_2 in style_names:
+        _apply_style_typo(styles[STYLE_TITRE_2], p.titre_2, color_primaire)
 
     if STYLE_CORPS in style_names:
-        corps = styles[STYLE_CORPS]
-        corps.font.name = charte.polices.corps
-        corps.font.color.rgb = color_texte
-        corps.paragraph_format.line_spacing = charte.espacements.interligne
+        _apply_style_typo(styles[STYLE_CORPS], p.corps, color_texte)
+        styles[STYLE_CORPS].paragraph_format.line_spacing = (
+            charte.espacements.interligne
+        )
 
     if STYLE_LEGENDE in style_names:
-        styles[STYLE_LEGENDE].font.name = charte.polices.corps
+        _apply_style_typo(styles[STYLE_LEGENDE], p.legende, color_texte)
+
+    # "Normal" : base de tout paragraphe sans style explicite (cellules de
+    # tableau, etc.) — on aligne sa famille sur le corps.
+    if "Normal" in style_names:
+        styles["Normal"].font.name = p.corps.famille
+
+    if "Prerequis Label" in style_names:
+        _apply_style_typo(styles["Prerequis Label"], p.prerequis_label, color_texte)
+
+    if "Prerequis Item" in style_names:
+        _apply_style_typo(styles["Prerequis Item"], p.prerequis_item, color_texte)
 
     for section in document.sections:
         marge = Mm(charte.espacements.marge_mm)
@@ -122,7 +125,9 @@ def render_article(
             elements.append(_build_page_break_subdoc(tpl))
         for section in page_sections:
             elements.append(
-                _build_section_subdoc(tpl, section, article_dir, config.image.largeur_mm_defaut)
+                build_section_subdoc(
+                    tpl, section, article_dir, config.image.largeur_mm_defaut
+                )
             )
 
     context = {"article": article, "elements": elements}
