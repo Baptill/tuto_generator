@@ -1,0 +1,14 @@
+version: 1
+nom: "Charte pilote 2026"
+couleurs:
+  primaire: "#1A2B4C"
+  secondaire: "#E85D2A"
+  texte: "#222222"
+  fond: "#FFFFFF"
+polices:
+  titres: "Georgia"
+  corps: "Calibri"
+logo: "logo.png"
+espacements:
+  interligne: 1.15
+  marge_mm: 20

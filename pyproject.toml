@@ -1,0 +1,20 @@
+[project]
+name = "tuto-generator"
+version = "0.1.0"
+description = "Générateur de tutoriels & articles — Étape 1 : génération sans IA"
+requires-python = ">=3.11"
+dependencies = [
+    "docxtpl>=0.18",
+    "python-docx>=1.1",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "Pillow>=10.0",
+    "docxcompose>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

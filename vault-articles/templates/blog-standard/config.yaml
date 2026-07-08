@@ -1,0 +1,25 @@
+template_id: "blog-standard"
+libelle: "Article de blog"
+fichier: "template.docx"
+type: "blog"
+sections_attendues:
+  min: 1
+  max: 20
+contraintes:
+  titre:
+    max_caracteres: 90
+  section_texte:
+    max_caracteres: 4000
+image:
+  formats_acceptes: ["png", "jpg", "jpeg", "webp"]
+  largeur_mm_defaut: 150
+catalogue_blocs:
+  - nom: "Texte pleine page"
+    description: "Paragraphes de texte occupant une page entière."
+    hauteurs_compatibles: [4]
+  - nom: "Image d'illustration demi-page"
+    description: "Visuel d'illustration avec légende, sur la moitié d'une page."
+    hauteurs_compatibles: [1, 2]
+  - nom: "Encadré astuce/info"
+    description: "Petit encadré isolé, combinable avec d'autres blocs sur la même page."
+    hauteurs_compatibles: [1, 2]

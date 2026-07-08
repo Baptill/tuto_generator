@@ -1,0 +1,28 @@
+template_id: "tuto-release"
+libelle: "Tutoriel de release"
+fichier: "template.docx"
+type: "tutoriel"
+sections_attendues:
+  min: 2
+  max: 12
+contraintes:
+  titre:
+    max_caracteres: 90
+  section_texte:
+    max_caracteres: 4000
+image:
+  formats_acceptes: ["png", "jpg", "jpeg", "webp"]
+  largeur_mm_defaut: 150
+catalogue_blocs:
+  - nom: "Texte pleine page"
+    description: "Paragraphes de texte occupant une page entière."
+    hauteurs_compatibles: [4]
+  - nom: "Image + légende demi-page"
+    description: "Une capture d'écran avec légende, sur la moitié d'une page."
+    hauteurs_compatibles: [1, 2]
+  - nom: "Encadré astuce/attention/info"
+    description: "Petit encadré isolé, combinable avec d'autres blocs sur la même page."
+    hauteurs_compatibles: [1, 2]
+  - nom: "Étape détaillée"
+    description: "Titre d'étape + texte + image, occupe la majorité d'une page."
+    hauteurs_compatibles: [2, 3, 4]

@@ -21,3 +21,15 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+### Python / projet générateur ###
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+*.egg-info/
+
+### Artefacts régénérables (jamais versionnés) ###
+vault-articles/articles/*/output/
+vault-articles/_index/registry.sqlite
