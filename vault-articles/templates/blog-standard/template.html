@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <base href="{{ base_href }}" />
+    <title>{{ article.titre }}</title>
+
+    <!-- Charte injectée au build : @page, @font-face, variables, styles nommés -->
+    <style>
+      {{ charte_css | safe }}
+    </style>
+
+    <!-- Design-system du template : layout des blocs (jamais de couleur en dur,
+     tout passe par les variables --couleur-* de la charte). -->
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        color: var(--couleur-texte);
+        background: var(--couleur-fond);
+      }
+
+      h1.titre-1 {
+        margin: 0 0 6mm;
+      }
+      h2.titre-2 {
+        margin: 0 0 6mm;
+      }
+      p.corps,
+      ul.corps {
+        margin: 0 0 2.5mm;
+      }
+      ul.corps {
+        padding-left: 6mm;
+      }
+      .corps li {
+        margin-bottom: 1mm;
+      }
+
+      /* En-tête du document (occupe ~1 unité, réservée par la pagination).
+     Espacement en padding interne (inclus dans min-height via border-box) et
+     non en margin externe : sinon la somme des blocs dépasse la page utile. */
+      .doc-header {
+        min-height: var(--unit-height);
+        padding-bottom: 4mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+      }
+      .doc-header .logo {
+        height: 12mm;
+        margin-bottom: 3mm;
+      }
+      .doc-header .resume {
+        color: var(--couleur-texte);
+        margin: 0 0 3mm;
+      }
+      .prerequis ul {
+        margin: 1mm 0 0;
+        padding-left: 5mm;
+      }
+
+      /* Grille des 4 hauteurs : chaque section occupe au moins son quota.
+     (Layouts multi-colonnes en display:table — support print robuste dans
+     WeasyPrint, contrairement à flexbox.) */
+      .sec {
+        min-height: var(--unit-height);
+        padding: 2mm 0;
+      }
+      .sec.h2 {
+        min-height: calc(var(--unit-height) * 2);
+      }
+      .sec.h3 {
+        min-height: calc(var(--unit-height) * 3);
+      }
+      .sec.h4 {
+        min-height: calc(var(--unit-height) * 4);
+      }
+
+      /* Chaque page rendue est un div .page. À l'impression, une feuille physique. */
+      .page {
+        background: var(--couleur-fond);
+      }
+      @media print {
+        .page {
+          break-after: page;
+        }
+        .page:last-child {
+          break-after: auto;
+        }
+      }
+
+      /* Images / légendes */
+      figure.image {
+        margin: 0 0 2mm;
+      }
+      figure.image img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+      figcaption.legende {
+        margin-top: 1.5mm;
+      }
+      /* Plafond de hauteur des images = quota de la section (moins titre/légende),
+     pour qu'une capture portrait ne déborde jamais sur la page suivante. */
+      .sec.h1 figure.image img {
+        max-height: calc(var(--unit-height) - 14mm);
+      }
+      .sec.h2 figure.image img {
+        max-height: calc(var(--unit-height) * 2 - 22mm);
+      }
+      .sec.h3 figure.image img {
+        max-height: calc(var(--unit-height) * 3 - 26mm);
+      }
+      .sec.h4 figure.image img {
+        max-height: calc(var(--unit-height) * 4 - 26mm);
+      }
+
+      /* --- etape-compacte : image | liseré arrondi | texte centré --- */
+      .etape-compacte .ec-row {
+        display: table;
+        width: 100%;
+      }
+      .etape-compacte .ec-image {
+        display: table-cell;
+        width: 48%;
+        vertical-align: middle;
+        padding-right: 8mm;
+      }
+      .etape-compacte .ec-textwrap {
+        display: table-cell;
+        vertical-align: middle;
+      }
+      /* Table interne : sa hauteur suit le TEXTE (pas l'image) → pill à la
+     hauteur du texte. Le liseré est une cellule étroite arrondie. */
+      .etape-compacte .ec-textinner {
+        display: table;
+      }
+      .etape-compacte .ec-lisere {
+        display: table-cell;
+        width: 4px;
+        background: var(--couleur-lisere);
+        border-radius: 999px;
+      }
+      .etape-compacte .ec-text {
+        display: table-cell;
+        vertical-align: middle;
+        padding-left: 5mm;
+      }
+      .etape-compacte .ec-text p.corps:last-child,
+      .etape-compacte .ec-text ul.corps:last-child {
+        margin-bottom: 0;
+      }
+
+      /* --- deux colonnes (image-gauche-texte / texte-image-droite) --- */
+      .deux-colonnes {
+        display: table;
+        width: 100%;
+      }
+      .deux-colonnes .col-image {
+        display: table-cell;
+        width: 45%;
+        vertical-align: middle;
+      }
+      .deux-colonnes .col-texte {
+        display: table-cell;
+        vertical-align: middle;
+      }
+      .image-gauche-texte .col-image {
+        padding-right: 8mm;
+      }
+      .texte-image-droite .col-image {
+        padding-left: 8mm;
+      }
+
+      /* --- triple-image : jusqu'à 3 captures côte à côte --- */
+      .triple-image-row {
+        display: table;
+        width: 100%;
+        border-spacing: 3mm 0;
+      }
+      .triple-image-row .ti-cell {
+        display: table-cell;
+        vertical-align: top;
+      }
+
+      /* --- Encadrés : couleurs sémantiques FIXES (indépendantes de la marque) --- */
+      .encadre {
+        border-left: 4px solid;
+        border-radius: 3px;
+        padding: 3mm 4mm;
+        margin: 0 0 3mm;
+      }
+      .encadre .encadre-texte {
+        margin: 0;
+      }
+      .encadre-astuce {
+        border-color: #2e7d32;
+        background: #eaf5eb;
+      }
+      .encadre-attention {
+        border-color: #c62828;
+        background: #fbeaea;
+      }
+      .encadre-info {
+        border-color: #1565c0;
+        background: #e9f1fb;
+      }
+
+      /* --- Aperçu écran : chaque .page s'affiche comme une feuille A4 distincte
+         (fond gris, ombre, espace entre les feuilles, façon traitement de
+         texte). WeasyPrint rend en media « print » et ignore ce bloc. --- */
+      @media screen {
+        html {
+          background: #fff;
+        }
+        body {
+          margin: 0;
+        }
+        .page {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 8mm auto;
+          padding: var(--marge);
+          box-shadow: 0 1px 12px rgba(0, 0, 0, 0.18);
+        }
+      }
+      /* Barre visible à l'écran (display:flex par défaut) et masquée à l'impression
+     (WeasyPrint rend en media print → la règle @media print l'emporte). */
+      .editor-bar {
+        display: flex;
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        gap: 8px;
+        z-index: 9999;
+        font-family: "Inter", sans-serif;
+      }
+      .editor-bar button {
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 12px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+      }
+      .editor-bar button.on {
+        background: var(--couleur-primaire);
+        color: #fff;
+        border-color: transparent;
+      }
+      @media print {
+        .editor-bar {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    {{ pages_html | safe }}
+
+    <!-- Barre d'édition : visible à l'écran uniquement (retirée du HTML enregistré
+       et absente du PDF). WeasyPrint n'exécute pas ce script. -->
+    <div class="editor-bar">
+      <button id="btn-edit" onclick="toggleEdit(this)">✏️ Mode édition</button>
+      <button onclick="enregistrerHTML()">💾 Enregistrer HTML</button>
+    </div>
+    <script>
+      function toggleEdit(btn) {
+        const on = document.designMode !== "on";
+        document.designMode = on ? "on" : "off";
+        btn.classList.toggle("on", on);
+        btn.textContent = on ? "✏️ Édition activée" : "✏️ Mode édition";
+      }
+      function enregistrerHTML() {
+        document.designMode = "off";
+        const clone = document.documentElement.cloneNode(true);
+        clone.querySelectorAll(".editor-bar, script").forEach((el) => el.remove());
+        const html = "<!DOCTYPE html>\n" + clone.outerHTML;
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "article.html";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    </script>
+  </body>
+</html>

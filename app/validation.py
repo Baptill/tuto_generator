@@ -58,10 +58,6 @@ def validate_article(article: Article, config: TemplateConfig, assets_dir: Path 
             report.add(f"Section id dupliqué : '{section.id}'.")
         ids_vus.add(section.id)
 
-        if not (1 <= section.hauteur <= 4):
-            # normalement garanti par le type Literal, gardé en défense.
-            report.add(f"Section '{section.id}' : hauteur {section.hauteur} hors de la plage 1-4.")
-
         for bloc in section.blocs:
             if isinstance(bloc, BlocParagraphe):
                 if len(bloc.texte) > config.contraintes.section_texte.max_caracteres:

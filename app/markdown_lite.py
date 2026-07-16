@@ -1,4 +1,4 @@
-"""Markdown léger → runs Word (voir CLAUDE.md, Étape 1, « Points techniques délicats »).
+"""Markdown léger → HTML (voir CLAUDE.md, Étape 1).
 
 Supporté volontairement minimal :
 - **gras**
@@ -11,41 +11,34 @@ liens, pas de listes numérotées — à étendre si le besoin apparaît en prat
 from __future__ import annotations
 
 import re
+from html import escape
 from typing import Iterable
-
-from docx.document import Document as DocxDocument
-from docx.text.paragraph import Paragraph
 
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _BULLET_RE = re.compile(r"^\s*[-*]\s+(.*)$")
 
 
-def _add_runs_with_bold(paragraph: Paragraph, text: str) -> None:
-    """Découpe `text` sur les marqueurs **gras** et ajoute les runs correspondants."""
+def _inline_to_html(text: str) -> str:
+    """Échappe le texte puis réinjecte les **gras** en <strong>."""
+    parts: list[str] = []
     pos = 0
     for match in _BOLD_RE.finditer(text):
         if match.start() > pos:
-            paragraph.add_run(text[pos : match.start()])
-        bold_run = paragraph.add_run(match.group(1))
-        bold_run.bold = True
+            parts.append(escape(text[pos : match.start()]))
+        parts.append(f"<strong>{escape(match.group(1))}</strong>")
         pos = match.end()
     if pos < len(text):
-        paragraph.add_run(text[pos:])
+        parts.append(escape(text[pos:]))
+    return "".join(parts)
 
 
 def _split_blocks(texte: str) -> Iterable[tuple[str, list[str]]]:
     """Regroupe les lignes en blocs ('paragraphe' | 'liste', [lignes])."""
-    lines = [line for line in texte.strip("\n").splitlines()]
+    lines = texte.strip("\n").splitlines()
+    blocks: list[tuple[str, list[str]]] = []
     current_kind: str | None = None
     buffer: list[str] = []
 
-    def flush():
-        if buffer:
-            yield_kind = current_kind or "paragraphe"
-            return yield_kind, list(buffer)
-        return None
-
-    blocks: list[tuple[str, list[str]]] = []
     for raw_line in lines:
         line = raw_line.strip()
         if not line:
@@ -67,21 +60,18 @@ def _split_blocks(texte: str) -> Iterable[tuple[str, list[str]]]:
     return blocks
 
 
-def add_markdown_lite(
-    container: DocxDocument,
-    texte: str,
-    style: str | None = None,
-    list_style: str = "List Bullet",
-) -> None:
-    """Ajoute `texte` (markdown léger) au conteneur docx (`Document` ou sous-document
-    docxtpl), en appliquant `style` aux paragraphes normaux et `list_style` aux
-    listes à puces.
+def markdown_to_html(texte: str, paragraph_class: str = "corps") -> str:
+    """Convertit `texte` (markdown léger) en fragment HTML.
+
+    Les paragraphes reçoivent la classe `paragraph_class`, les listes deviennent
+    des <ul><li>. Le texte est systématiquement échappé (sécurité + fidélité).
     """
+    out: list[str] = []
     for kind, lines in _split_blocks(texte):
         if kind == "liste":
-            for line in lines:
-                p = container.add_paragraph(style=list_style)
-                _add_runs_with_bold(p, line)
+            items = "".join(f"<li>{_inline_to_html(line)}</li>" for line in lines)
+            out.append(f'<ul class="{paragraph_class}">{items}</ul>')
         else:
-            p = container.add_paragraph(style=style)
-            _add_runs_with_bold(p, " ".join(lines))
+            joined = _inline_to_html(" ".join(lines))
+            out.append(f'<p class="{paragraph_class}">{joined}</p>')
+    return "".join(out)

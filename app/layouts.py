@@ -1,166 +1,176 @@
-"""Catalogue des layouts de section.
+"""Catalogue des layouts de section — rendu HTML (voir CLAUDE.md §3).
 
-Un layout décrit la disposition visuelle des blocs d'une section dans le Word.
-Le champ `layout` du content.yaml choisit lequel appliquer :
+Chaque layout transforme une `Section` en fragment HTML. La mise en page fine
+(colonnes, gap, liseré arrondi, centrage vertical) est portée par le CSS du
+design-system défini dans le template, jamais par des valeurs codées ici : ce
+module ne produit que la structure et les classes.
 
-  texte-seul        — titre puis blocs empilés verticalement (défaut)
-  image-dessus-texte — image pleine largeur, texte en dessous
-  image-gauche-texte — tableau 2 col : image | texte
-  texte-image-droite — tableau 2 col : texte | image
-
-Chaque fonction reçoit les mêmes arguments et retourne un DocxSubdoc prêt à
-être injecté dans le template via la boucle `{%p for el in elements %}`.
+La grille des 4 hauteurs se traduit par une classe `h1`…`h4` sur la section ;
+le CSS lui donne une hauteur minimale correspondante.
 """
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Mm
-from docxtpl import DocxTemplate
-
-from app.markdown_lite import add_markdown_lite
+from app.markdown_lite import markdown_to_html
 from app.schemas import BlocEncadre, BlocImage, BlocParagraphe, Section
 
-_STYLE_TITRE_2 = "Titre 2"
-_STYLE_CORPS = "Corps"
-_STYLE_LEGENDE = "Legende"
-_ENCADRE_STYLES = {
-    "astuce": "Encadre Astuce",
-    "attention": "Encadre Attention",
-    "info": "Encadre Info",
+_ENCADRE_CLASSES = {
+    "astuce": "encadre encadre-astuce",
+    "attention": "encadre encadre-attention",
+    "info": "encadre encadre-info",
 }
 
-# Largeurs des colonnes du layout 2 colonnes (A4 = 210mm − 2×20mm marges = 170mm)
-_COL_IMAGE_MM = 75
-_COL_TEXTE_MM = 90
-
 
 # ---------------------------------------------------------------------------
-# Helpers internes
+# Helpers de rendu de blocs
 # ---------------------------------------------------------------------------
 
-def _remove_table_borders(table) -> None:
-    """Rend le tableau invisible (pas de trait de bordure)."""
-    tbl = table._tbl
-    tblPr = tbl.find(qn("w:tblPr"))
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
-    tblBorders = OxmlElement("w:tblBorders")
-    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:val"), "none")
-        tblBorders.append(el)
-    tblPr.append(tblBorders)
+def _titre_html(titre: str | None) -> str:
+    return f'<h2 class="titre-2">{escape(titre)}</h2>' if titre else ""
 
 
-def _set_col_width(table, col_idx: int, width_mm: int) -> None:
-    for cell in table.columns[col_idx].cells:
-        cell.width = Mm(width_mm)
+def _image_html(bloc: BlocImage) -> str:
+    """<figure> avec l'image (src relatif à article_dir, résolu via base_url)
+    et une légende optionnelle."""
+    src = escape(bloc.fichier)
+    largeur = f' style="width:{bloc.largeur_mm}mm"' if bloc.largeur_mm else ""
+    legende = (
+        f'<figcaption class="legende">{escape(bloc.legende)}</figcaption>'
+        if bloc.legende
+        else ""
+    )
+    return f'<figure class="image"><img src="{src}"{largeur} alt="">{legende}</figure>'
 
 
-def _add_image_bloc(container, bloc: BlocImage, article_dir: Path, largeur_mm: int) -> None:
-    image_path = article_dir / bloc.fichier
-    p = container.add_paragraph()
-    p.add_run().add_picture(str(image_path), width=Mm(largeur_mm))
-    if bloc.legende:
-        container.add_paragraph(bloc.legende, style=_STYLE_LEGENDE)
+def _bloc_html(bloc) -> str:
+    if isinstance(bloc, BlocParagraphe):
+        return markdown_to_html(bloc.texte, paragraph_class="corps")
+    if isinstance(bloc, BlocEncadre):
+        cls = _ENCADRE_CLASSES[bloc.style]
+        inner = markdown_to_html(bloc.texte, paragraph_class="encadre-texte")
+        return f'<div class="{cls}">{inner}</div>'
+    if isinstance(bloc, BlocImage):
+        return _image_html(bloc)
+    return ""
 
 
-def _add_texte_blocs(container, blocs, titre: str | None = None) -> None:
-    if titre:
-        container.add_paragraph(titre, style=_STYLE_TITRE_2)
-    for bloc in blocs:
-        if isinstance(bloc, BlocParagraphe):
-            add_markdown_lite(container, bloc.texte, style=_STYLE_CORPS)
-        elif isinstance(bloc, BlocEncadre):
-            style = _ENCADRE_STYLES[bloc.style]
-            add_markdown_lite(container, bloc.texte, style=style, list_style=style)
+def _texte_blocs_html(blocs) -> str:
+    return "".join(_bloc_html(b) for b in blocs)
 
 
-# ---------------------------------------------------------------------------
-# Layouts
-# ---------------------------------------------------------------------------
-
-def layout_texte_seul(
-    tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int
-):
-    """Titre puis blocs empilés verticalement dans l'ordre du content.yaml."""
-    subdoc = tpl.new_subdoc()
-    subdoc.add_paragraph(section.titre, style=_STYLE_TITRE_2)
-    for bloc in section.blocs:
-        if isinstance(bloc, BlocParagraphe):
-            add_markdown_lite(subdoc, bloc.texte, style=_STYLE_CORPS)
-        elif isinstance(bloc, BlocEncadre):
-            style = _ENCADRE_STYLES[bloc.style]
-            add_markdown_lite(subdoc, bloc.texte, style=style, list_style=style)
-        elif isinstance(bloc, BlocImage):
-            _add_image_bloc(subdoc, bloc, article_dir, bloc.largeur_mm or largeur_mm_defaut)
-    return subdoc
-
-
-def layout_image_dessus_texte(
-    tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int
-):
-    """Titre, puis image(s) pleine largeur, puis blocs texte/encadrés."""
-    subdoc = tpl.new_subdoc()
-    subdoc.add_paragraph(section.titre, style=_STYLE_TITRE_2)
-
+def _split_images(section: Section) -> tuple[list[BlocImage], list]:
     images = [b for b in section.blocs if isinstance(b, BlocImage)]
     autres = [b for b in section.blocs if not isinstance(b, BlocImage)]
-
-    for bloc in images:
-        _add_image_bloc(subdoc, bloc, article_dir, bloc.largeur_mm or largeur_mm_defaut)
-    _add_texte_blocs(subdoc, autres)
-
-    return subdoc
+    return images, autres
 
 
-def _layout_deux_colonnes(
-    tpl: DocxTemplate,
-    section: Section,
-    article_dir: Path,
-    largeur_mm_defaut: int,
-    image_a_gauche: bool,
-) -> object:
-    """Tableau 2 colonnes sans bordure : image d'un côté, texte de l'autre."""
-    subdoc = tpl.new_subdoc()
-
-    images = [b for b in section.blocs if isinstance(b, BlocImage)]
-    autres = [b for b in section.blocs if not isinstance(b, BlocImage)]
-
-    table = subdoc.add_table(rows=1, cols=2)
-    table.autofit = False
-    _remove_table_borders(table)
-
-    col_img = 0 if image_a_gauche else 1
-    col_txt = 1 if image_a_gauche else 0
-
-    _set_col_width(table, col_img, _COL_IMAGE_MM)
-    _set_col_width(table, col_txt, _COL_TEXTE_MM)
-
-    if images:
-        _add_image_bloc(table.cell(0, col_img), images[0], article_dir, _COL_IMAGE_MM)
-
-    _add_texte_blocs(table.cell(0, col_txt), autres, titre=section.titre)
-
-    return subdoc
+def _section_wrapper(section: Section, layout_class: str, inner: str) -> str:
+    """Enveloppe le contenu dans <section class="sec h{n} {layout}">."""
+    return (
+        f'<section class="sec h{section.hauteur} {layout_class}">{inner}</section>'
+    )
 
 
-def layout_image_gauche_texte(
-    tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int
-):
-    """Tableau 2 col : image à gauche, titre + texte à droite."""
-    return _layout_deux_colonnes(tpl, section, article_dir, largeur_mm_defaut, image_a_gauche=True)
+# ---------------------------------------------------------------------------
+# Layouts h=1
+# ---------------------------------------------------------------------------
+
+def layout_texte_seul(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=1 — titre optionnel puis blocs empilés verticalement."""
+    inner = _titre_html(section.titre) + _texte_blocs_html(section.blocs)
+    return _section_wrapper(section, "texte-seul", inner)
 
 
-def layout_texte_image_droite(
-    tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int
-):
-    """Tableau 2 col : titre + texte à gauche, image à droite."""
-    return _layout_deux_colonnes(tpl, section, article_dir, largeur_mm_defaut, image_a_gauche=False)
+def layout_etape_compacte(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=1 — image (≤50%) | liseré arrondi | texte centré verticalement.
+
+    Structure : la colonne texte et son liseré sont regroupés dans `.ec-textwrap`,
+    dont la hauteur suit le texte (pas l'image) ; le liseré (`.ec-lisere`)
+    s'étire à cette hauteur → pill de la hauteur du texte, coins 100% arrondis
+    (CSS). Le gap image/liseré et le centrage vertical sont gérés en CSS.
+    """
+    images, autres = _split_images(section)
+    image_html = _image_html(images[0]) if images else ""
+    texte_html = _texte_blocs_html(autres)
+    inner = (
+        _titre_html(section.titre)
+        + '<div class="ec-row">'
+        + f'<div class="ec-image">{image_html}</div>'
+        + '<div class="ec-textwrap"><div class="ec-textinner">'
+        + '<div class="ec-lisere"></div>'
+        + f'<div class="ec-text">{texte_html}</div>'
+        + "</div></div>"
+        + "</div>"
+    )
+    return _section_wrapper(section, "etape-compacte", inner)
+
+
+# ---------------------------------------------------------------------------
+# Layouts h=2
+# ---------------------------------------------------------------------------
+
+def _deux_colonnes(section: Section, layout_class: str, image_a_gauche: bool) -> str:
+    images, autres = _split_images(section)
+    image_html = f'<div class="col-image">{_image_html(images[0])}</div>' if images else ""
+    texte_html = (
+        f'<div class="col-texte">{_titre_html(section.titre)}{_texte_blocs_html(autres)}</div>'
+    )
+    cols = (image_html + texte_html) if image_a_gauche else (texte_html + image_html)
+    inner = f'<div class="deux-colonnes">{cols}</div>'
+    return _section_wrapper(section, layout_class, inner)
+
+
+def layout_image_gauche_texte(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=2 — image à gauche, titre + texte à droite."""
+    return _deux_colonnes(section, "image-gauche-texte", image_a_gauche=True)
+
+
+def layout_texte_image_droite(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=2 — titre + texte à gauche, image à droite."""
+    return _deux_colonnes(section, "texte-image-droite", image_a_gauche=False)
+
+
+def layout_image_dessus_texte(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=2 — titre optionnel, image(s) pleine largeur, texte en dessous."""
+    images, autres = _split_images(section)
+    inner = (
+        _titre_html(section.titre)
+        + "".join(_image_html(img) for img in images)
+        + _texte_blocs_html(autres)
+    )
+    return _section_wrapper(section, "image-dessus-texte", inner)
+
+
+def layout_triple_image(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=2 — titre optionnel + jusqu'à 3 images côte à côte avec légendes."""
+    images, _ = _split_images(section)
+    images = images[:3]
+    cells = "".join(f'<div class="ti-cell">{_image_html(img)}</div>' for img in images)
+    inner = _titre_html(section.titre) + f'<div class="triple-image-row">{cells}</div>'
+    return _section_wrapper(section, "triple-image", inner)
+
+
+# ---------------------------------------------------------------------------
+# Layouts h=3 et h=4
+# ---------------------------------------------------------------------------
+
+def layout_etape_detaillee(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=3 — titre optionnel + image(s) pleine largeur + texte/encadrés."""
+    images, autres = _split_images(section)
+    inner = (
+        _titre_html(section.titre)
+        + "".join(_image_html(img) for img in images)
+        + _texte_blocs_html(autres)
+    )
+    return _section_wrapper(section, "etape-detaillee", inner)
+
+
+def layout_pleine_page(section: Section, article_dir: Path, largeur_defaut: int) -> str:
+    """h=4 — titre optionnel + tous les blocs. Occupe une page entière."""
+    inner = _titre_html(section.titre) + _texte_blocs_html(section.blocs)
+    return _section_wrapper(section, "pleine-page", inner)
 
 
 # ---------------------------------------------------------------------------
@@ -168,17 +178,24 @@ def layout_texte_image_droite(
 # ---------------------------------------------------------------------------
 
 LAYOUTS = {
-    "texte-seul": layout_texte_seul,
-    "image-dessus-texte": layout_image_dessus_texte,
+    "texte-seul":         layout_texte_seul,
+    "etape-compacte":     layout_etape_compacte,
     "image-gauche-texte": layout_image_gauche_texte,
     "texte-image-droite": layout_texte_image_droite,
+    "image-dessus-texte": layout_image_dessus_texte,
+    "triple-image":       layout_triple_image,
+    "etape-detaillee":    layout_etape_detaillee,
+    "pleine-page":        layout_pleine_page,
 }
 
 
-def build_section_subdoc(
-    tpl: DocxTemplate, section: Section, article_dir: Path, largeur_mm_defaut: int
-):
+def render_section_html(
+    section: Section, article_dir: Path, largeur_defaut: int, extra_classes: str = ""
+) -> str:
     fn = LAYOUTS.get(section.layout)
     if fn is None:
-        raise ValueError(f"Layout inconnu : '{section.layout}'. Valeurs possibles : {list(LAYOUTS)}")
-    return fn(tpl, section, article_dir, largeur_mm_defaut)
+        raise ValueError(f"Layout inconnu : '{section.layout}'. Valeurs : {list(LAYOUTS)}")
+    html = fn(section, article_dir, largeur_defaut)
+    if extra_classes:
+        html = html.replace('class="sec ', f'class="sec {extra_classes} ', 1)
+    return html

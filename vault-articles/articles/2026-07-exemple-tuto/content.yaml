@@ -2,76 +2,52 @@ id: "2026-07-exemple-tuto"
 type: "tutoriel"
 template_id: "tuto-release"
 langue: "fr"
-titre: "Comment configurer X dans la release 4.8"
-resume: "Guide pas à pas pour activer et configurer la fonctionnalité X."
+titre: "Accéder à la surveillance du bilan"
+resume: "Guide pas à pas pour accéder aux différentes fonctionnalités de surveillance."
 auteur: "Baptiste Lemoine"
 prerequis:
-  - Être connecté à votre compte Syopé sur la plateforme
-  - Être connecté à internet via un navigateur Google Chrome ou Mozilla Firefox
-  - Disposer des droits administrateur sur votre compte
+  - Etre connecté à un compte sur l'application Syopé
 
 sections:
   - id: "sec-1"
-    titre: "Introduction"
-    hauteur: 1
-    layout: "texte-seul"
+    titre: "1 - Se diriger vers le scan d'identité"
+    layout: "etape-compacte"
     blocs:
+      - type: "image"
+        fichier: "assets/prerequis.png"
       - type: "paragraphe"
         texte: |
-          Ce tutoriel explique comment activer la fonctionnalité **X** ajoutée
-          dans la release 4.8, et comment l'adapter à votre environnement.
+          Depuis le menu "Identité",
+
+          Cliquez sur le bouton "Pièce d'identité"
+
   - id: "sec-2"
-    titre: "Avant de commencer"
-    hauteur: 1
-    layout: "texte-seul"
+    layout: "triple-image"
     blocs:
-      - type: "encadre"
-        style: "astuce"
-        texte: "Pensez à **sauvegarder votre configuration actuelle** avant de continuer."
+      - type: "image"
+        fichier: "assets/prerequis.png"
+        legende: "1. Cliquez sur l'icône en forme de trombone présente dans l'en-tête du bilan"
+      - type: "image"
+        fichier: "assets/etape2.png"
+        legende: "2. Cliquez ensuite sur \"Refus de soin et/ou de transport\""
+      - type: "image"
+        fichier: "assets/resultat.png"
+        legende: "3. Renseignez les champs manquants si nécessaire et cliquez sur \"Renseigner\""
+
   - id: "sec-3"
-    titre: "Prérequis"
-    hauteur: 2
+    titre: "1 - Choisir son bilan"
     layout: "image-gauche-texte"
     blocs:
       - type: "image"
         fichier: "assets/prerequis.png"
-        legende: "Écran des prérequis"
+        legende: "Page d'accueil de l'application"
+      - type: "paragraphe"
+        texte: "Sur la page d'accueil de l'application :"
       - type: "paragraphe"
         texte: |
-          Vérifiez que les éléments suivants sont réunis :
-          - accès administrateur à l'application
-          - version 4.8 ou supérieure installée
-          - droits d'écriture sur le dossier de configuration
-  - id: "sec-4"
-    titre: "Étapes de configuration"
-    hauteur: 4
-    layout: "image-dessus-texte"
-    blocs:
-      - type: "image"
-        fichier: "assets/etape2.png"
-        legende: "Écran de configuration"
-      - type: "paragraphe"
-        texte: |
-          Ouvrez le panneau de configuration puis suivez les étapes ci-dessous :
-          - ouvrir le menu **Paramètres**
-          - sélectionner l'onglet **Fonctionnalités**
-          - activer l'option **X**
-      - type: "encadre"
-        style: "attention"
-        texte: "L'activation de **X** nécessite un redémarrage du service."
-  - id: "sec-5"
-    titre: "Vérification du résultat"
-    hauteur: 3
-    layout: "texte-image-droite"
-    blocs:
-      - type: "paragraphe"
-        texte: "Une fois le service redémarré, contrôlez que la fonctionnalité est bien active."
-      - type: "encadre"
-        style: "info"
-        texte: "En cas de problème, consultez les journaux applicatifs."
-      - type: "image"
-        fichier: "assets/resultat.png"
-        legende: "Résultat final"
+          - (1) Sélectionnez votre intervention
+          - (2) Cliquez sur "clôturer le bilan"
+
 metadonnees_seo:
   slug: null
   meta_title: null

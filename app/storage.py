@@ -40,7 +40,7 @@ def template_dir(template_id: str) -> Path:
     return VAULT_ROOT / "templates" / template_id
 
 
-def template_docx_path(template_id: str, fichier: str = "template.docx") -> Path:
+def template_file_path(template_id: str, fichier: str = "template.html") -> Path:
     return template_dir(template_id) / fichier
 
 

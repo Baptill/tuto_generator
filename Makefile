@@ -4,7 +4,9 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help venv install templates test generate clean
+.PHONY: help venv install test generate pdf open clean
+
+ARTICLE ?= 2026-07-exemple-tuto
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -18,16 +20,22 @@ install: venv ## Installe les dépendances Python dans .venv
 	$(PIP) install -q --upgrade pip
 	$(PIP) install -q -r requirements.txt
 
-templates: install ## (Re)génère les templates Word pilotes (tuto-release, blog-standard)
-	$(PYTHON) -m scripts.build_templates
-
 test: install ## Lance la suite de tests
 	$(PYTHON) -m pytest tests/ -q
 
-generate: install ## Génère l'article d'exemple (docx + pdf si LibreOffice dispo)
-	$(PYTHON) -m app.cli 2026-07-exemple-tuto
+generate: install ## Génère HTML + PDF de l'article (ARTICLE=<id> pour cibler un autre)
+	$(PYTHON) -m app.cli generate $(ARTICLE)
 
-init: install templates test ## Initialise le projet : venv + deps + templates pilotes + tests
+generate-html: install ## Génère uniquement le HTML (sans PDF) — plus rapide pour itérer sur le template
+	$(PYTHON) -m app.cli generate $(ARTICLE) --skip-pdf
+
+pdf: install ## Reconvertit le HTML existant en PDF (utile après retouche navigateur)
+	$(PYTHON) -m app.cli pdf $(ARTICLE)
+
+open: ## Ouvre le HTML généré dans le navigateur par défaut
+	open vault-articles/articles/$(ARTICLE)/output/article.html
+
+init: install test ## Initialise le projet : venv + deps + tests
 	@echo "Projet initialisé. Essaie : make generate"
 
 clean: ## Supprime le venv et les caches Python

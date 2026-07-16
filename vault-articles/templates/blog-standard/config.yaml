@@ -1,6 +1,6 @@
 template_id: "blog-standard"
 libelle: "Article de blog"
-fichier: "template.docx"
+fichier: "template.html"
 type: "blog"
 sections_attendues:
   min: 1

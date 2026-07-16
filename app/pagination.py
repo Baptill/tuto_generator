@@ -2,8 +2,8 @@
 
 Le moteur empile les sections dans l'ordre du `content.yaml` et déclenche un
 saut de page dès que la section suivante ferait dépasser 4 unités de hauteur
-sur la page courante. Ce module ne fait que le regroupement ; le rendu Word
-(saut de page effectif) est géré par `app.renderer`.
+sur la page courante. Ce module ne fait que le regroupement ; le rendu HTML
+(saut de page effectif via `break-before: page`) est géré par `app.renderer`.
 """
 from __future__ import annotations
 
@@ -12,8 +12,12 @@ from app.schemas import Section
 PAGE_HEIGHT_UNITS = 4
 
 
-def paginate(sections: list[Section]) -> list[list[Section]]:
+def paginate(sections: list[Section], premiere_page_reservee: int = 0) -> list[list[Section]]:
     """Regroupe les sections en pages selon la règle de la grille 4 hauteurs.
+
+    `premiere_page_reservee` indique combien d'unités sont déjà occupées sur
+    la première page par des éléments hors-sections (titre, prérequis…).
+    Les pages suivantes démarrent toujours avec un budget complet de 4 unités.
 
     Une section dont la hauteur dépasse à elle seule PAGE_HEIGHT_UNITS ne
     devrait jamais arriver (contrainte du schéma : hauteur ∈ [1,4]), mais on
@@ -21,7 +25,7 @@ def paginate(sections: list[Section]) -> list[list[Section]]:
     """
     pages: list[list[Section]] = []
     current_page: list[Section] = []
-    current_height = 0
+    current_height = premiere_page_reservee
 
     for section in sections:
         if current_page and current_height + section.hauteur > PAGE_HEIGHT_UNITS:

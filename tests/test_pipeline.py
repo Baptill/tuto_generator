@@ -1,7 +1,9 @@
-"""Tests de bout en bout du pipeline Étape 1 (voir CLAUDE.md, DoD Étape 1)."""
-from __future__ import annotations
+"""Tests de bout en bout du pipeline Étape 1 (voir CLAUDE.md, DoD Étape 1).
 
-from docx import Document
+Le moteur produit du HTML (converti en PDF par WeasyPrint) : les tests vérifient
+la structure HTML plutôt qu'un document Word.
+"""
+from __future__ import annotations
 
 from app import storage
 from app.build import generate_article
@@ -10,25 +12,37 @@ from app.schemas import Section
 from app.validation import validate_article
 
 
-def _section(id_: str, hauteur: int) -> Section:
-    return Section(id=id_, titre=id_, hauteur=hauteur, blocs=[])
-
-
-def _all_paragraphs(doc):
-    """Itère sur tous les paragraphes du doc, y compris dans les cellules de tableau."""
-    yield from doc.paragraphs
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                yield from cell.paragraphs
+def _section(id_: str, layout: str = "texte-seul") -> Section:
+    return Section(id=id_, titre=id_, layout=layout, blocs=[])
 
 
 def test_pagination_respects_grid():
-    sections = [_section("a", 1), _section("b", 1), _section("c", 2), _section("d", 4), _section("e", 3)]
+    # h=1, h=1, h=2, h=4, h=3
+    sections = [
+        _section("a", "texte-seul"),
+        _section("b", "texte-seul"),
+        _section("c", "image-gauche-texte"),
+        _section("d", "pleine-page"),
+        _section("e", "etape-detaillee"),
+    ]
     pages = paginate(sections)
     assert [[s.id for s in page] for page in pages] == [["a", "b", "c"], ["d"], ["e"]]
     for page in pages:
         assert sum(s.hauteur for s in page) <= 4
+
+
+def test_pagination_reserves_first_page():
+    # h=1, h=1, h=2, h=4, h=3
+    sections = [
+        _section("a", "texte-seul"),
+        _section("b", "texte-seul"),
+        _section("c", "image-gauche-texte"),
+        _section("d", "pleine-page"),
+        _section("e", "etape-detaillee"),
+    ]
+    pages = paginate(sections, premiere_page_reservee=1)
+    # Première page : budget 3 (4-1 réservé titre) → a(1)+b(1)=2, c(2) ferait 4>3
+    assert [[s.id for s in page] for page in pages] == [["a", "b"], ["c"], ["d"], ["e"]]
 
 
 def test_validate_article_rejects_too_long_title():
@@ -42,18 +56,21 @@ def test_validate_article_rejects_too_long_title():
 
 def test_generate_sample_article_end_to_end():
     result = generate_article("2026-07-exemple-tuto", skip_pdf=True)
-    assert result.docx_path.is_file()
+    assert result.html_path.is_file()
     assert len(result.hash_contenu) == 64
 
-    doc = Document(str(result.docx_path))
-    assert len(doc.inline_shapes) == 3  # 3 images, cf. DoD Étape 1
-    styles_used = {p.style.name for p in _all_paragraphs(doc)}
-    assert {"Titre 1", "Titre 2", "Corps", "Legende", "Encadre Astuce", "Encadre Attention", "Encadre Info"} <= styles_used
+    html = result.html_path.read_text(encoding="utf-8")
 
-    page_breaks = sum(
-        1
-        for p in doc.paragraphs
-        for r in p.runs
-        if 'w:type="page"' in r._element.xml
-    )
-    assert page_breaks == 2  # 3 pages : (1+1+2), (4), (3) — cf. content.yaml de l'article
+    # 5 images : sec-1(1) + sec-2(3) + sec-3(1)
+    assert html.count("<img") == 5
+
+    # Styles nommés de la charte appliqués via classes
+    for cls in ("titre-1", "titre-2", "corps", "legende"):
+        assert cls in html
+
+    # Le liseré de l'étape compacte est bien rendu
+    assert '<div class="ec-lisere">' in html
+
+    # Deux feuilles : sec-1(h=1)+sec-2(h=2)=3 sur page 1 (budget 3),
+    # sec-3(h=2) → page 2. Chaque page est un <div class="page">.
+    assert html.count('<div class="page">') == 2

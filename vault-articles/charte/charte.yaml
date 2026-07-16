@@ -6,10 +6,11 @@ couleurs:
   secondaire: "#16213E"
   texte: "#333333"
   fond: "#FFFFFF"
+  lisere: "#6793F3"
 polices:
   titre_1:
     famille: "Inter"
-    taille_pt: 26
+    taille_pt: 24
     gras: true
     text_alignement: "center"
   titre_2:
@@ -42,4 +43,4 @@ background: "background.png"
 
 espacements:
   interligne: 1.25
-  marge_mm: 22
+  marge_mm: 11

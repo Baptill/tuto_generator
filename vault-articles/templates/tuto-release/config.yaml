@@ -1,6 +1,6 @@
 template_id: "tuto-release"
 libelle: "Tutoriel de release"
-fichier: "template.docx"
+fichier: "template.html"
 type: "tutoriel"
 sections_attendues:
   min: 2

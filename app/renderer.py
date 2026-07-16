@@ -1,107 +1,140 @@
-"""Moteur de rendu — content.yaml + template.docx + charte.yaml → article.docx.
+"""Moteur de rendu — content.yaml + template.html + charte.yaml → article.html.
 
-Voir CLAUDE.md §3 (sections modulaires, styles nommés) et §4 (modèle de
+Voir CLAUDE.md §3 (moteur HTML/CSS, sections modulaires) et §4 (modèle de
 données). Règle d'or : ce module lit `content.yaml`, jamais l'inverse.
+
+Le HTML produit est à la fois l'artefact éditable (dans le navigateur) et la
+source de la conversion PDF (WeasyPrint). La charte est injectée sous forme de
+variables CSS + règles typographiques ; le template porte le design-system
+(layout des blocs), jamais de couleur codée en dur.
 """
 
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-from docx.shared import Mm, RGBColor
+from jinja2 import Template
 
-_ALIGNEMENTS = {
-    "left": WD_ALIGN_PARAGRAPH.LEFT,
-    "center": WD_ALIGN_PARAGRAPH.CENTER,
-    "right": WD_ALIGN_PARAGRAPH.RIGHT,
-    "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
-}
-from docxtpl import DocxTemplate
-
-from app.layouts import build_section_subdoc
+from app.layouts import render_section_html
 from app.pagination import paginate
-from app.schemas import Article, Charte, TemplateConfig
+from app.schemas import Article, Charte, StyleTypo, TemplateConfig
 
-STYLE_TITRE_1 = "Titre 1"
-STYLE_TITRE_2 = "Titre 2"
-STYLE_CORPS = "Corps"
-STYLE_LEGENDE = "Legende"
+VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
+CHARTE_FONTS_DIR = VAULT_ROOT / "charte" / "fonts"
+
+A4_HEIGHT_MM = 297
+
+# Correspondance police → fichiers pour le @font-face (famille « Inter »).
+_FONT_FACES = [
+    ("Inter", "normal", "400", "Inter-Regular.ttf"),
+    ("Inter", "normal", "600", "Inter-SemiBold.ttf"),
+    ("Inter", "normal", "700", "Inter-Bold.ttf"),
+]
 
 
 class RenderError(Exception):
     pass
 
 
-def _build_page_break_subdoc(tpl: DocxTemplate):
-    subdoc = tpl.new_subdoc()
-    run = subdoc.add_paragraph().add_run()
-    run.add_break(WD_BREAK.PAGE)
-    return subdoc
+def _font_face_css() -> str:
+    faces = []
+    for famille, style, weight, fichier in _FONT_FACES:
+        path = CHARTE_FONTS_DIR / fichier
+        if path.is_file():
+            faces.append(
+                f"@font-face{{font-family:'{famille}';font-style:{style};"
+                f"font-weight:{weight};src:url('{path.as_uri()}');}}"
+            )
+    return "".join(faces)
 
 
-def _apply_style_typo(style, stylo, couleur_fallback: RGBColor) -> None:
-    """Applique un StyleTypo de la charte à un style nommé Word."""
-    from docx.shared import Pt
+def _typo_rules(selector: str, stylo: StyleTypo, couleur_fallback: str) -> str:
+    """Traduit un StyleTypo de la charte en règle CSS pour un style nommé."""
+    couleur = stylo.couleur or couleur_fallback
+    props = [
+        f"font-family:'{stylo.famille}',sans-serif",
+        f"font-size:{stylo.taille_pt}pt",
+        f"font-weight:{'700' if stylo.gras else '400'}",
+        f"font-style:{'italic' if stylo.italique else 'normal'}",
+        f"text-decoration:{'underline' if stylo.souligne else 'none'}",
+        f"color:{couleur}",
+        f"text-align:{stylo.text_alignement}",
+    ]
+    return f"{selector}{{{';'.join(props)};}}"
 
-    font = style.font
-    font.name = stylo.famille
-    font.size = Pt(stylo.taille_pt)
-    font.bold = stylo.gras
-    font.italic = stylo.italique
-    font.underline = stylo.souligne
-    couleur_hex = (stylo.couleur or "").lstrip("#").upper()
-    font.color.rgb = RGBColor.from_string(couleur_hex) if couleur_hex else couleur_fallback
-    style.paragraph_format.alignment = _ALIGNEMENTS[stylo.text_alignement]
 
-
-def _apply_charte(tpl: DocxTemplate, charte: Charte) -> None:
-    """Applique toutes les propriétés typographiques et d'espacement de la
-    charte aux styles nommés du document rendu.
-
-    Les couleurs sémantiques des encadrés (astuce/attention/info) restent
-    fixes dans le template : elles portent un sens indépendant de la marque.
-    """
-    document = tpl.docx
-    styles = document.styles
-    color_primaire = RGBColor.from_string(charte.couleurs.primaire.lstrip("#").upper())
-    color_texte = RGBColor.from_string(charte.couleurs.texte.lstrip("#").upper())
-
-    style_names = {s.name for s in styles}
+def _charte_css(charte: Charte) -> str:
+    """Génère le bloc CSS injecté depuis la charte : @page, @font-face,
+    variables `:root` et règles des styles nommés (typographie)."""
+    c = charte.couleurs
     p = charte.polices
+    marge = charte.espacements.marge_mm
+    unit_mm = (A4_HEIGHT_MM - 2 * marge) / 4
 
-    if STYLE_TITRE_1 in style_names:
-        _apply_style_typo(styles[STYLE_TITRE_1], p.titre_1, color_primaire)
+    root_vars = (
+        ":root{"
+        f"--couleur-primaire:{c.primaire};"
+        f"--couleur-secondaire:{c.secondaire};"
+        f"--couleur-texte:{c.texte};"
+        f"--couleur-fond:{c.fond};"
+        f"--couleur-lisere:{c.lisere};"
+        f"--interligne:{charte.espacements.interligne};"
+        f"--marge:{marge}mm;"
+        f"--unit-height:{unit_mm:.3f}mm;"
+        "}"
+    )
 
-    if STYLE_TITRE_2 in style_names:
-        _apply_style_typo(styles[STYLE_TITRE_2], p.titre_2, color_primaire)
+    typo = "".join([
+        f"@page{{size:A4;margin:{marge}mm;}}",
+        _typo_rules("h1.titre-1", p.titre_1, c.primaire),
+        _typo_rules("h2.titre-2", p.titre_2, c.primaire),
+        _typo_rules(".corps", p.corps, c.texte)
+        .rstrip("}") + f"line-height:{charte.espacements.interligne};}}",
+        _typo_rules(".legende", p.legende, c.texte),
+        _typo_rules(".prerequis-label", p.prerequis_label, c.texte),
+        _typo_rules(".prerequis-item", p.prerequis_item, c.texte),
+    ])
 
-    if STYLE_CORPS in style_names:
-        _apply_style_typo(styles[STYLE_CORPS], p.corps, color_texte)
-        styles[STYLE_CORPS].paragraph_format.line_spacing = (
-            charte.espacements.interligne
+    return _font_face_css() + root_vars + typo
+
+
+def _header_html(article: Article, logo_uri: str | None) -> str:
+    """En-tête du document (titre + résumé + prérequis), placé en tête de la
+    première page. Occupe ~1 unité de hauteur (réservée par la pagination)."""
+    parts = ['<header class="doc-header">']
+    if logo_uri:
+        parts.append(f'<img class="logo" src="{escape(logo_uri, quote=True)}" alt="">')
+    parts.append(f'<h1 class="titre-1">{escape(article.titre)}</h1>')
+    if article.resume:
+        parts.append(f'<p class="resume">{escape(article.resume)}</p>')
+    if article.prerequis:
+        items = "".join(f'<li class="prerequis-item">{escape(p)}</li>' for p in article.prerequis)
+        parts.append(
+            '<div class="prerequis"><p class="prerequis-label">Prérequis</p>'
+            f"<ul>{items}</ul></div>"
         )
+    parts.append("</header>")
+    return "".join(parts)
 
-    if STYLE_LEGENDE in style_names:
-        _apply_style_typo(styles[STYLE_LEGENDE], p.legende, color_texte)
 
-    # "Normal" : base de tout paragraphe sans style explicite (cellules de
-    # tableau, etc.) — on aligne sa famille sur le corps.
-    if "Normal" in style_names:
-        styles["Normal"].font.name = p.corps.famille
-
-    if "Prerequis Label" in style_names:
-        _apply_style_typo(styles["Prerequis Label"], p.prerequis_label, color_texte)
-
-    if "Prerequis Item" in style_names:
-        _apply_style_typo(styles["Prerequis Item"], p.prerequis_item, color_texte)
-
-    for section in document.sections:
-        marge = Mm(charte.espacements.marge_mm)
-        section.left_margin = marge
-        section.right_margin = marge
-        section.top_margin = marge
-        section.bottom_margin = marge
+def _pages_html(
+    article: Article, config: TemplateConfig, article_dir: Path, logo_uri: str | None
+) -> str:
+    """Assemble le HTML page par page selon la grille des 4 hauteurs. Chaque
+    page est un `<div class="page">` : à l'écran une feuille A4 distincte, à
+    l'impression une feuille physique (voir CSS du template)."""
+    # Le bloc titre + prérequis occupe 1 unité de hauteur sur la première page.
+    pages = paginate(article.sections, premiere_page_reservee=1)
+    if not pages:
+        pages = [[]]  # au moins la page d'en-tête même sans section
+    largeur = config.image.largeur_mm_defaut
+    out: list[str] = []
+    for page_idx, page_sections in enumerate(pages):
+        inner = _header_html(article, logo_uri) if page_idx == 0 else ""
+        inner += "".join(render_section_html(s, article_dir, largeur) for s in page_sections)
+        out.append(f'<div class="page">{inner}</div>')
+    return "".join(out)
 
 
 def render_article(
@@ -112,29 +145,21 @@ def render_article(
     article_dir: Path,
     output_path: Path,
 ) -> Path:
-    """Rend `article` avec `template_path` + `charte`, écrit le docx dans
-    `output_path`. `article_dir` est le dossier contenant `assets/` (les
-    chemins d'image du content.yaml sont relatifs à ce dossier).
-    """
-    tpl = DocxTemplate(str(template_path))
+    """Rend `article` avec `template_path` (HTML/Jinja) + `charte`, écrit le
+    HTML dans `output_path`. Les chemins d'image du content.yaml sont relatifs
+    à `article_dir` (résolus via <base href>)."""
+    template = Template(template_path.read_text(encoding="utf-8"), autoescape=True)
 
-    pages = paginate(article.sections)
-    elements = []
-    for i, page_sections in enumerate(pages):
-        if i > 0:
-            elements.append(_build_page_break_subdoc(tpl))
-        for section in page_sections:
-            elements.append(
-                build_section_subdoc(
-                    tpl, section, article_dir, config.image.largeur_mm_defaut
-                )
-            )
+    logo_path = VAULT_ROOT / "charte" / (charte.logo or "")
+    logo_uri = logo_path.as_uri() if charte.logo and logo_path.is_file() else None
 
-    context = {"article": article, "elements": elements}
-    tpl.render(context)
-
-    _apply_charte(tpl, charte)
+    html = template.render(
+        article=article,
+        charte_css=_charte_css(charte),
+        base_href=article_dir.as_uri() + "/",
+        pages_html=_pages_html(article, config, article_dir, logo_uri),
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tpl.save(str(output_path))
+    output_path.write_text(html, encoding="utf-8")
     return output_path

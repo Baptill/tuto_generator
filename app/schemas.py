@@ -12,7 +12,32 @@ from typing import Annotated, Literal, Union
 from pydantic import BaseModel, Field
 
 HauteurSection = Literal[1, 2, 3, 4]
-LayoutSection = Literal["texte-seul", "image-dessus-texte", "image-gauche-texte", "texte-image-droite"]
+
+# Hauteur intrinsèque de chaque layout — source de vérité du poids d'une section.
+# Un utilisateur n'a jamais à renseigner `hauteur` dans content.yaml : c'est le
+# choix du layout qui la détermine.
+LAYOUT_HAUTEURS: dict[str, int] = {
+    "texte-seul":        1,
+    "etape-compacte":    1,
+    "image-gauche-texte": 2,
+    "texte-image-droite": 2,
+    "image-dessus-texte": 2,
+    "triple-image":      2,
+    "etape-detaillee":   3,
+    "pleine-page":       4,
+}
+
+LayoutSection = Literal[
+    "texte-seul",
+    "etape-compacte",
+    "image-gauche-texte",
+    "texte-image-droite",
+    "image-dessus-texte",
+    "triple-image",
+    "etape-detaillee",
+    "pleine-page",
+]
+
 StyleEncadre = Literal["astuce", "attention", "info"]
 StatutArticle = Literal["brouillon", "valide", "publie"]
 
@@ -40,12 +65,13 @@ Bloc = Annotated[Union[BlocParagraphe, BlocEncadre, BlocImage], Field(discrimina
 
 class Section(BaseModel):
     id: str
-    titre: str
-    hauteur: HauteurSection = Field(
-        description="Unités de hauteur occupées sur une page divisée en 4 (voir CLAUDE.md §3)."
-    )
+    titre: str | None = None
     layout: LayoutSection = "texte-seul"
     blocs: list[Bloc]
+
+    @property
+    def hauteur(self) -> int:
+        return LAYOUT_HAUTEURS[self.layout]
 
 
 class MetadonneesSeo(BaseModel):
@@ -107,7 +133,7 @@ class TemplateConfig(BaseModel):
 
     template_id: str
     libelle: str
-    fichier: str = "template.docx"
+    fichier: str = "template.html"
     type: Literal["tutoriel", "blog"]
     sections_attendues: SectionsAttendues = Field(default_factory=SectionsAttendues)
     contraintes: Contraintes = Field(default_factory=Contraintes)
@@ -120,10 +146,11 @@ class Couleurs(BaseModel):
     secondaire: str
     texte: str
     fond: str
+    lisere: str
 
 
 class StyleTypo(BaseModel):
-    """Propriétés typographiques d'un style nommé Word.
+    """Propriétés typographiques d'un style nommé (classe CSS).
 
     `gras`, `italique` et `souligne` sont cumulables : les trois à true
     donnent du texte gras + italique + souligné.
