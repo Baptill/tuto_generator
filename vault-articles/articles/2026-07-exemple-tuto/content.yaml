@@ -14,7 +14,7 @@ sections:
     layout: "etape-compacte"
     blocs:
       - type: "image"
-        fichier: "assets/prerequis.png"
+        fichier: "assets/img4.png"
       - type: "paragraphe"
         texte: |
           Depuis le menu "Identité",
@@ -22,17 +22,18 @@ sections:
           Cliquez sur le bouton "Pièce d'identité"
 
   - id: "sec-2"
+    titre: "2 - Scanner un document"
     layout: "triple-image"
     blocs:
       - type: "image"
-        fichier: "assets/prerequis.png"
+        fichier: "assets/img1.png"
         legende: "1. Cliquez sur l'icône en forme de trombone présente dans l'en-tête du bilan"
       - type: "image"
-        fichier: "assets/etape2.png"
-        legende: "2. Cliquez ensuite sur \"Refus de soin et/ou de transport\""
+        fichier: "assets/img2.png"
+        legende: '2. Cliquez ensuite sur "Refus de soin et/ou de transport"'
       - type: "image"
-        fichier: "assets/resultat.png"
-        legende: "3. Renseignez les champs manquants si nécessaire et cliquez sur \"Renseigner\""
+        fichier: "assets/img3.png"
+        legende: '3. Renseignez les champs manquants si nécessaire et cliquez sur "Renseigner"'
 
   - id: "sec-3"
     titre: "1 - Choisir son bilan"

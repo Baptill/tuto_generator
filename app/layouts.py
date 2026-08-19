@@ -67,9 +67,15 @@ def _split_images(section: Section) -> tuple[list[BlocImage], list]:
 
 
 def _section_wrapper(section: Section, layout_class: str, inner: str) -> str:
-    """Enveloppe le contenu dans <section class="sec h{n} {layout}">."""
+    """Enveloppe le contenu dans <section id="…" class="sec h{n} {layout}">.
+
+    L'`id` (celui du content.yaml) sert d'ancre stable aux calques de retouche :
+    un calque ancré à `sec-2` suit sa section même si un changement de charte
+    la fait basculer sur une autre page (voir CLAUDE.md §3).
+    """
     return (
-        f'<section class="sec h{section.hauteur} {layout_class}">{inner}</section>'
+        f'<section id="{escape(section.id, quote=True)}" '
+        f'class="sec h{section.hauteur} {layout_class}">{inner}</section>'
     )
 
 
@@ -144,11 +150,24 @@ def layout_image_dessus_texte(section: Section, article_dir: Path, largeur_defau
 
 
 def layout_triple_image(section: Section, article_dir: Path, largeur_defaut: int) -> str:
-    """h=2 — titre optionnel + jusqu'à 3 images côte à côte avec légendes."""
+    """h=2 — titre optionnel + jusqu'à 3 images côte à côte avec légendes.
+
+    largeur_mm des blocs ignoré ici : la grille impose une largeur égale à
+    chaque cellule (width: 100% via CSS), indépendamment de la taille native
+    des images.
+    """
     images, _ = _split_images(section)
     images = images[:3]
-    cells = "".join(f'<div class="ti-cell">{_image_html(img)}</div>' for img in images)
-    inner = _titre_html(section.titre) + f'<div class="triple-image-row">{cells}</div>'
+    cells = []
+    for img in images:
+        src = escape(img.fichier)
+        legende = (
+            f'<figcaption class="legende">{escape(img.legende)}</figcaption>'
+            if img.legende else ""
+        )
+        fig = f'<figure class="image"><img src="{src}" alt="">{legende}</figure>'
+        cells.append(f'<div class="ti-cell">{fig}</div>')
+    inner = _titre_html(section.titre) + f'<div class="triple-image-row">{"".join(cells)}</div>'
     return _section_wrapper(section, "triple-image", inner)
 
 
@@ -190,7 +209,11 @@ LAYOUTS = {
 
 
 def render_section_html(
-    section: Section, article_dir: Path, largeur_defaut: int, extra_classes: str = ""
+    section: Section,
+    article_dir: Path,
+    largeur_defaut: int,
+    extra_classes: str = "",
+    calques_html: str = "",
 ) -> str:
     fn = LAYOUTS.get(section.layout)
     if fn is None:
@@ -198,4 +221,8 @@ def render_section_html(
     html = fn(section, article_dir, largeur_defaut)
     if extra_classes:
         html = html.replace('class="sec ', f'class="sec {extra_classes} ', 1)
+    if calques_html:
+        # Les calques ancrés à cette section sont ses derniers enfants : hors
+        # flux (position:absolute), ils n'affectent pas sa hauteur.
+        html = html[: -len("</section>")] + calques_html + "</section>"
     return html

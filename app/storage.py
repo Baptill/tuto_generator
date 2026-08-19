@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from app.schemas import Article, Charte, Meta, TemplateConfig
+from app.schemas import Article, Charte, Meta, Retouches, TemplateConfig
 
 VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
 
@@ -46,6 +46,10 @@ def template_file_path(template_id: str, fichier: str = "template.html") -> Path
 
 def template_config_path(template_id: str) -> Path:
     return template_dir(template_id) / "config.yaml"
+
+
+def retouches_path(article_id: str) -> Path:
+    return article_dir(article_id) / "retouches.yaml"
 
 
 def charte_path() -> Path:
@@ -87,6 +91,24 @@ def load_meta(article_id: str) -> Meta | None:
     return Meta.model_validate(_load_yaml(path))
 
 
+def load_retouches(article_id: str) -> Retouches:
+    """Calques posés dans l'éditeur navigateur. Absent = aucune retouche."""
+    path = retouches_path(article_id)
+    if not path.is_file():
+        return Retouches()
+    return Retouches.model_validate(_load_yaml(path))
+
+
+def write_retouches(article_id: str, retouches: Retouches) -> Path:
+    """Écrit (ou supprime, si plus aucun calque) le fichier de retouches."""
+    path = retouches_path(article_id)
+    if not retouches.calques:
+        path.unlink(missing_ok=True)
+        return path
+    _dump_yaml(path, retouches.model_dump(mode="json"))
+    return path
+
+
 def compute_hash_contenu(raw_content_yaml: bytes) -> str:
     return hashlib.sha256(raw_content_yaml).hexdigest()
 
@@ -113,5 +135,12 @@ def write_meta(
         cree_le=cree_le,
         build_le=date.today(),
     )
-    _dump_yaml(meta_path(article_id), meta.model_dump(mode="json"))
+    write_meta_model(meta)
+    return meta
+
+
+def write_meta_model(meta: Meta) -> Meta:
+    """Écrit un `Meta` déjà construit (utilisé pour les mises à jour ciblées,
+    ex. le marqueur de retouche HTML posé par le serveur d'édition)."""
+    _dump_yaml(meta_path(meta.id), meta.model_dump(mode="json"))
     return meta

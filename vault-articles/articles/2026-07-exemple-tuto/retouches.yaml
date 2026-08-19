@@ -1,0 +1,30 @@
+version: 1
+calques:
+- ancre_section: sec-1
+  page: 0
+  classes: calque calque-fleche
+  style: 'left: 29.9%; top: 39.78%; width: 20%; transform: translateY(-50%) rotate(0deg);'
+  texte: false
+  redim: fleche
+  html: ''
+- ancre_section: sec-1
+  page: 0
+  classes: calque calque-pastille
+  style: 'left: 29.9%; top: 39.78%;'
+  texte: false
+  redim: non
+  html: '1'
+- ancre_section: sec-2
+  page: 0
+  classes: calque calque-fleche
+  style: 'left: 19.46%; top: 18.09%; width: 63.16%; transform: translateY(-50%) rotate(31.7deg);'
+  texte: false
+  redim: fleche
+  html: ''
+- ancre_section: sec-3
+  page: 1
+  classes: calque calque-etiquette
+  style: 'left: 49.88%; top: 29.91%; width: 18%;'
+  texte: true
+  redim: boite
+  html: <span class="calque-texte">Suit sa section</span>

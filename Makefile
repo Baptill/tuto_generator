@@ -4,7 +4,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help venv install test generate pdf open clean
+.PHONY: help venv install test generate generate-html generate-all pdf open init clean
 
 ARTICLE ?= 2026-07-exemple-tuto
 
@@ -28,6 +28,21 @@ generate: install ## Génère HTML + PDF de l'article (ARTICLE=<id> pour cibler 
 
 generate-html: install ## Génère uniquement le HTML (sans PDF) — plus rapide pour itérer sur le template
 	$(PYTHON) -m app.cli generate $(ARTICLE) --skip-pdf
+
+generate-all: install ## Régénère TOUS les articles (à lancer après un changement de charte)
+	@ok=0; ko=0; echecs=""; \
+	for dir in vault-articles/articles/*/; do \
+		id=$$(basename "$$dir"); \
+		[ -f "$$dir/content.yaml" ] || continue; \
+		if $(PYTHON) -m app.cli generate "$$id"; then \
+			ok=$$((ok+1)); \
+		else \
+			ko=$$((ko+1)); echecs="$$echecs $$id"; \
+		fi; \
+	done; \
+	echo "------------------------------------------------------------"; \
+	echo "$$ok article(s) régénéré(s), $$ko échec(s)$$echecs"; \
+	[ $$ko -eq 0 ]
 
 pdf: install ## Reconvertit le HTML existant en PDF (utile après retouche navigateur)
 	$(PYTHON) -m app.cli pdf $(ARTICLE)

@@ -191,6 +191,35 @@ class Charte(BaseModel):
     espacements: Espacements = Field(default_factory=Espacements)
 
 
+class Calque(BaseModel):
+    """Un ajout hors flux posé dans l'éditeur navigateur (voir CLAUDE.md §3).
+
+    Ancré à une **section** (`ancre_section`) dès que le point de pose tombe
+    dans une section : le calque suit alors sa section même si un changement
+    de charte la déplace sur une autre page. À défaut (en-tête, marge), il est
+    ancré à la page par son index.
+    """
+
+    ancre_section: str | None = None
+    page: int = 0
+    classes: str = "calque"
+    style: str = ""
+    texte: bool = False
+    redim: Literal["boite", "largeur", "fleche", "non"] = "boite"
+    html: str = ""
+
+
+class Retouches(BaseModel):
+    """retouches.yaml (par article) — calques survivant aux régénérations.
+
+    Source de vérité des retouches, au même titre que `content.yaml` l'est du
+    contenu : `output/` reste un cache reconstructible.
+    """
+
+    version: int = 1
+    calques: list[Calque] = Field(default_factory=list)
+
+
 class Meta(BaseModel):
     """meta.yaml (par article)"""
 
@@ -203,3 +232,6 @@ class Meta(BaseModel):
     url_publiee: str | None = None
     cree_le: date
     build_le: date
+    # Retouche du HTML rendu depuis l'éditeur navigateur (§3). Effacé à chaque
+    # génération : signale donc un output/ plus récent que son content.yaml.
+    retouche_html_le: date | None = None

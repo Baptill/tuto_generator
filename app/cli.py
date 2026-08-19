@@ -66,5 +66,21 @@ def pdf(
     typer.secho(f"pdf   → {pdf_path}", fg=typer.colors.GREEN)
 
 
+@app.command()
+def serve(port: int = typer.Option(None, help="Port d'écoute (défaut : 8765).")):
+    """Lance le service local d'enregistrement des retouches.
+
+    Nécessaire pour que le bouton « Enregistrer HTML » de l'aperçu écrase
+    output/article.html et régénère le PDF (voir app/serveur.py).
+    """
+    import uvicorn
+
+    from app.serveur_config import PORT_DEFAUT
+
+    port = port or PORT_DEFAUT
+    typer.secho(f"Enregistrement des retouches → http://127.0.0.1:{port}", fg=typer.colors.GREEN)
+    uvicorn.run("app.serveur:app", host="127.0.0.1", port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     app()

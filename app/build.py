@@ -44,6 +44,9 @@ def generate_article(article_id: str, skip_pdf: bool = False) -> BuildResult:
         template_path=template_path,
         article_dir=a_dir,
         output_path=html_path,
+        # Les calques posés dans l'éditeur survivent à la régénération : ils
+        # sont une source à part, ancrée aux sections (CLAUDE.md §3).
+        retouches=storage.load_retouches(article_id),
     )
 
     pdf_path: Path | None = None

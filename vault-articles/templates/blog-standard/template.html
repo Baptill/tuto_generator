@@ -105,9 +105,10 @@
         max-width: 100%;
         height: auto;
         display: block;
+        width: 100%;
       }
       figcaption.legende {
-        margin-top: 1.5mm;
+        margin-top: 3.5mm;
       }
       /* Plafond de hauteur des images = quota de la section (moins titre/légende),
      pour qu'une capture portrait ne déborde jamais sur la page suivante. */
@@ -185,7 +186,7 @@
       .triple-image-row {
         display: table;
         width: 100%;
-        border-spacing: 3mm 0;
+        border-spacing: 10mm 0;
       }
       .triple-image-row .ti-cell {
         display: table-cell;
@@ -233,67 +234,14 @@
           box-shadow: 0 1px 12px rgba(0, 0, 0, 0.18);
         }
       }
-      /* Barre visible à l'écran (display:flex par défaut) et masquée à l'impression
-     (WeasyPrint rend en media print → la règle @media print l'emporte). */
-      .editor-bar {
-        display: flex;
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        gap: 8px;
-        z-index: 9999;
-        font-family: "Inter", sans-serif;
-      }
-      .editor-bar button {
-        font: inherit;
-        font-size: 13px;
-        padding: 6px 12px;
-        cursor: pointer;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        background: #fff;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-      }
-      .editor-bar button.on {
-        background: var(--couleur-primaire);
-        color: #fff;
-        border-color: transparent;
-      }
-      @media print {
-        .editor-bar {
-          display: none !important;
-        }
-      }
     </style>
   </head>
   <body>
     {{ pages_html | safe }}
 
-    <!-- Barre d'édition : visible à l'écran uniquement (retirée du HTML enregistré
-       et absente du PDF). WeasyPrint n'exécute pas ce script. -->
-    <div class="editor-bar">
-      <button id="btn-edit" onclick="toggleEdit(this)">✏️ Mode édition</button>
-      <button onclick="enregistrerHTML()">💾 Enregistrer HTML</button>
-    </div>
-    <script>
-      function toggleEdit(btn) {
-        const on = document.designMode !== "on";
-        document.designMode = on ? "on" : "off";
-        btn.classList.toggle("on", on);
-        btn.textContent = on ? "✏️ Édition activée" : "✏️ Mode édition";
-      }
-      function enregistrerHTML() {
-        document.designMode = "off";
-        const clone = document.documentElement.cloneNode(true);
-        clone.querySelectorAll(".editor-bar, script").forEach((el) => el.remove());
-        const html = "<!DOCTYPE html>\n" + clone.outerHTML;
-        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "article.html";
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-    </script>
+    <!-- Barre d'édition + palette de modules insérables : injectées par
+       app/editeur.py (source unique pour tous les templates). Visibles à
+       l'écran uniquement — retirées du HTML enregistré et absentes du PDF. -->
+    {{ editeur_html | safe }}
   </body>
 </html>

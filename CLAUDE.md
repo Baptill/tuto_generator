@@ -45,7 +45,17 @@ Le template est un fichier `template.html` (Jinja2 : `{{ article.titre }}`, `{% 
 
 ### Surface d'édition : retouches finales dans le navigateur
 
-Le HTML rendu est éditable via `contenteditable`. L'utilisateur peut **modifier** le texte **et ajouter** du contenu : ajout libre de texte/paragraphes/listes (natif), et ajout d'**éléments structurés** (encadré, image, séparateur, nouvelle section) via un menu d'insertion à définir. Modèle retenu : **retouche finale à sens unique** (générer → retoucher → produire le PDF pour la prod), les retouches ne remontant pas dans `content.yaml` — cohérent avec le principe « le document est un build ». Point ouvert : proposer aussi un mode « ajout remonté dans `content.yaml` » qui survivrait aux régénérations de charte (voir §7).
+Le HTML rendu est éditable via `designMode`. L'utilisateur peut **modifier** le texte **et ajouter** du contenu depuis une palette (`app/editeur.py`, injectée dans les templates via `{{ editeur_html }}` — source unique pour toutes les chartes et tous les templates). Modèle retenu : **retouche finale à sens unique** (générer → retoucher → produire le PDF pour la prod), les retouches ne remontant pas dans `content.yaml` — cohérent avec le principe « le document est un build ». Point ouvert : proposer aussi un mode « ajout remonté dans `content.yaml` » qui survivrait aux régénérations de charte (voir §7).
+
+Trois règles gouvernent cette surface :
+
+1. **La hauteur du document est verrouillée.** Chaque `.page` a une hauteur fixe (4 unités de la grille) et `overflow:hidden` : aucune retouche ne peut décaler la pagination, ce qui dépasse est rogné et non repoussé.
+2. **Tout ajout est un calque hors flux** — paragraphe, titre, liste, encadré, image, colonnes, séparateur, et annotations (flèche, cadre, pastille, étiquette). Position et taille en **% de la page**, donc fidèles au PDF quelle que soit l'échelle de rendu ; déplaçables et redimensionnables à la souris, posables n'importe où (aucun ancrage obligatoire à une image).
+3. **Toute action est annulable** (historique de snapshots couvrant calques et frappe, Ctrl+Z).
+
+« Enregistrer HTML » n'est pas un « enregistrer sous » : il **écrase `output/article.html`** et **régénère le PDF**, via le service local `app/serveur.py` (`python -m app.cli serve`). Le fichier écrit conserve la barre d'édition (masquée à l'impression, ignorée par WeasyPrint) et reste donc ré-éditable.
+
+**Les calques survivent aux régénérations.** L'enregistrement les persiste dans `retouches.yaml` (une **source**, versionnée dans Git au même titre que `content.yaml` — pas un artefact), et le moteur de rendu les réinjecte à chaque build. Un calque est ancré à sa **section** (`ancre_section`, l'`id` du `content.yaml`) plutôt qu'à une page : si un changement de charte déplace la section sur une autre feuille, le calque la suit. Les calques posés hors section (en-tête, marge) sont ancrés à l'index de page ; ceux dont l'ancre a disparu sont reversés sur la dernière page plutôt que perdus. Cela tranche partiellement le point ouvert §7 : les **ajouts** remontent bien dans une source durable, mais les **modifications de texte dans le flux** ne sont toujours pas reprises (elles appartiennent à `content.yaml`) — d'où le marqueur `meta.retouche_html_le`, effacé à la génération suivante, qui alimentera l'avertissement de re-synchro de l'Étape 2.
 
 ### Sections modulaires : grille de page en 4 hauteurs
 

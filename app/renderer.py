@@ -16,9 +16,10 @@ from pathlib import Path
 
 from jinja2 import Template
 
+from app.editeur import editeur_html
 from app.layouts import render_section_html
 from app.pagination import paginate
-from app.schemas import Article, Charte, StyleTypo, TemplateConfig
+from app.schemas import Article, Calque, Charte, Retouches, StyleTypo, TemplateConfig
 
 VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
 CHARTE_FONTS_DIR = VAULT_ROOT / "charte" / "fonts"
@@ -118,8 +119,41 @@ def _header_html(article: Article, logo_uri: str | None) -> str:
     return "".join(parts)
 
 
+def _calque_html(calque: Calque) -> str:
+    """Rend un calque de retouche. `calque.html` provient de l'éditeur : il est
+    assaini à l'écriture de `retouches.yaml` (voir app/serveur.py), pas ici."""
+    return (
+        f'<div class="{escape(calque.classes, quote=True)}"'
+        f' style="{escape(calque.style, quote=True)}"'
+        f' data-texte="{"oui" if calque.texte else "non"}"'
+        f' data-redim="{calque.redim}"'
+        f' contenteditable="{"true" if calque.texte else "false"}">{calque.html}</div>'
+    )
+
+
+def _grouper_calques(retouches: Retouches) -> tuple[dict[str, str], dict[int, str]]:
+    """Répartit les calques par ancre : par id de section, ou par index de page
+    pour ceux posés hors section (en-tête, marge)."""
+    par_section: dict[str, list[str]] = {}
+    par_page: dict[int, list[str]] = {}
+    for c in retouches.calques:
+        html = _calque_html(c)
+        if c.ancre_section:
+            par_section.setdefault(c.ancre_section, []).append(html)
+        else:
+            par_page.setdefault(c.page, []).append(html)
+    return (
+        {k: "".join(v) for k, v in par_section.items()},
+        {k: "".join(v) for k, v in par_page.items()},
+    )
+
+
 def _pages_html(
-    article: Article, config: TemplateConfig, article_dir: Path, logo_uri: str | None
+    article: Article,
+    config: TemplateConfig,
+    article_dir: Path,
+    logo_uri: str | None,
+    retouches: Retouches,
 ) -> str:
     """Assemble le HTML page par page selon la grille des 4 hauteurs. Chaque
     page est un `<div class="page">` : à l'écran une feuille A4 distincte, à
@@ -129,11 +163,25 @@ def _pages_html(
     if not pages:
         pages = [[]]  # au moins la page d'en-tête même sans section
     largeur = config.image.largeur_mm_defaut
+    calques_section, calques_page = _grouper_calques(retouches)
     out: list[str] = []
     for page_idx, page_sections in enumerate(pages):
         inner = _header_html(article, logo_uri) if page_idx == 0 else ""
-        inner += "".join(render_section_html(s, article_dir, largeur) for s in page_sections)
+        inner += "".join(
+            render_section_html(
+                s, article_dir, largeur, calques_html=calques_section.pop(s.id, "")
+            )
+            for s in page_sections
+        )
+        inner += calques_page.get(page_idx, "")
         out.append(f'<div class="page">{inner}</div>')
+    # Calques dont l'ancre a disparu (section supprimée du content.yaml) ou dont
+    # la page n'existe plus : reversés sur la dernière page plutôt que perdus.
+    orphelins = "".join(calques_section.values()) + "".join(
+        html for idx, html in calques_page.items() if idx >= len(pages)
+    )
+    if orphelins:
+        out[-1] = out[-1][: -len("</div>")] + orphelins + "</div>"
     return "".join(out)
 
 
@@ -144,6 +192,7 @@ def render_article(
     template_path: Path,
     article_dir: Path,
     output_path: Path,
+    retouches: Retouches | None = None,
 ) -> Path:
     """Rend `article` avec `template_path` (HTML/Jinja) + `charte`, écrit le
     HTML dans `output_path`. Les chemins d'image du content.yaml sont relatifs
@@ -157,7 +206,10 @@ def render_article(
         article=article,
         charte_css=_charte_css(charte),
         base_href=article_dir.as_uri() + "/",
-        pages_html=_pages_html(article, config, article_dir, logo_uri),
+        pages_html=_pages_html(
+            article, config, article_dir, logo_uri, retouches or Retouches()
+        ),
+        editeur_html=editeur_html(article_id=article_dir.name),
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

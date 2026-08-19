@@ -2,8 +2,9 @@ id: 2026-07-exemple-tuto
 template_id: tuto-release
 template_version: 1
 charte_version: 1
-hash_contenu: dc2b8794364492b837a33579f243d3ff20d4b6ccd33966823f2efc8ae91beb74
+hash_contenu: 7ddaa1e83525e7487a955f3aba70bc9e24b6f200fc9b37f1e95a388c27df3f6b
 statut: brouillon
 url_publiee: null
 cree_le: '2026-07-02'
-build_le: '2026-07-16'
+build_le: '2026-08-05'
+retouche_html_le: '2026-08-05'

@@ -60,17 +60,20 @@ def test_generate_sample_article_end_to_end():
     assert len(result.hash_contenu) == 64
 
     html = result.html_path.read_text(encoding="utf-8")
+    # Le fragment de l'éditeur (barre, palette, script) est injecté en fin de
+    # <body> et contient lui aussi du balisage : on n'inspecte que le document.
+    document = html.split('<style id="editeur-css">')[0]
 
     # 5 images : sec-1(1) + sec-2(3) + sec-3(1)
-    assert html.count("<img") == 5
+    assert document.count("<img") == 5
 
     # Styles nommés de la charte appliqués via classes
     for cls in ("titre-1", "titre-2", "corps", "legende"):
-        assert cls in html
+        assert cls in document
 
     # Le liseré de l'étape compacte est bien rendu
-    assert '<div class="ec-lisere">' in html
+    assert '<div class="ec-lisere">' in document
 
     # Deux feuilles : sec-1(h=1)+sec-2(h=2)=3 sur page 1 (budget 3),
     # sec-3(h=2) → page 2. Chaque page est un <div class="page">.
-    assert html.count('<div class="page">') == 2
+    assert document.count('<div class="page">') == 2
