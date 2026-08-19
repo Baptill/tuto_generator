@@ -23,28 +23,45 @@ flux du document (elles appartiennent à `content.yaml`). D'où le marqueur
 """
 from __future__ import annotations
 
-import re
 from datetime import date
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import storage
+from app.build import generate_article
+from app.composer import UI_DIR, VAULT_MOUNT, router as composer_router
+from app.editeur import assainir_html
 from app.pdf import PdfConversionError, convert_to_pdf
 from app.schemas import Calque, Retouches
 from app.serveur_config import PORT_DEFAUT  # noqa: F401 — réexport pour la CLI
 
-app = FastAPI(title="tuto-generator — enregistrement des retouches")
+app = FastAPI(title="tuto-generator — composeur & enregistrement des retouches")
+
+# Le composeur (UI de saisie du content.yaml) partage ce service : un seul
+# `python -m app.cli serve` sert la saisie, l'aperçu et l'enregistrement.
+app.include_router(composer_router)
+app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
+# Assets, polices et logo lisibles en http:// pour l'aperçu du composeur
+# (le HTML de production, lui, garde ses chemins file://).
+app.mount(VAULT_MOUNT, StaticFiles(directory=str(storage.VAULT_ROOT)), name="vault")
 
 
 class ChargeEnregistrement(BaseModel):
     """Corps du POST : le document complet + ses calques déjà structurés par
     l'éditeur (le navigateur a le DOM, inutile de re-parser le HTML côté
-    serveur)."""
+    serveur).
+
+    `regenerer` : le HTML envoyé est un rendu de travail (aperçu du composeur,
+    servi en http://) qu'il ne faut pas figer dans `output/`. On ne garde alors
+    que les calques et on reconstruit l'artefact depuis `content.yaml`.
+    """
 
     html: str
     calques: list[Calque] = Field(default_factory=list)
+    regenerer: bool = False
 
 
 # L'aperçu est ouvert en file:// : le navigateur envoie « Origin: null ».
@@ -63,7 +80,7 @@ def _output_dir(article_id: str):
     base = (storage.VAULT_ROOT / "articles").resolve()
     a_dir = storage.article_dir(article_id).resolve()
     if base not in a_dir.parents or not storage.content_path(article_id).is_file():
-        raise HTTPException(status_code=404, detail=f"Article inconnu : {article_id}")
+        raise HTTPException(status_code=404, detail=f"Tutoriel inconnu : {article_id}")
     return a_dir / "output"
 
 
@@ -87,35 +104,28 @@ async def enregistrer_html(article_id: str, charge: ChargeEnregistrement) -> dic
     out_dir = _output_dir(article_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     html_path = out_dir / "article.html"
-    html_path.write_text(charge.html, encoding="utf-8")
 
-    calques = [c.model_copy(update={"html": _assainir(c.html)}) for c in charge.calques]
+    calques = [c.model_copy(update={"html": assainir_html(c.html)}) for c in charge.calques]
     storage.write_retouches(article_id, Retouches(calques=calques))
 
     pdf_erreur = None
-    try:
-        convert_to_pdf(html_path, out_dir)
-    except PdfConversionError as exc:
-        pdf_erreur = str(exc)
-
-    _marquer_retouche(article_id)
+    if charge.regenerer:
+        # Aperçu du composeur : on rebâtit depuis la source, calques réinjectés.
+        resultat = generate_article(article_id)
+        pdf_erreur = resultat.pdf_error
+    else:
+        html_path.write_text(charge.html, encoding="utf-8")
+        try:
+            convert_to_pdf(html_path, out_dir)
+        except PdfConversionError as exc:
+            pdf_erreur = str(exc)
+        _marquer_retouche(article_id)
     return {
         "html": str(html_path),
         "pdf": None if pdf_erreur else str(out_dir / "article.pdf"),
         "pdf_erreur": pdf_erreur,
         "calques": len(calques),
     }
-
-
-_SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.IGNORECASE | re.DOTALL)
-_HANDLER_RE = re.compile(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.IGNORECASE)
-
-
-def _assainir(html: str) -> str:
-    """Le contenu d'un calque est saisi dans le navigateur puis réinjecté à
-    chaque build : on en retire scripts et gestionnaires d'événements avant de
-    le persister."""
-    return _HANDLER_RE.sub("", _SCRIPT_RE.sub("", html))
 
 
 def _marquer_retouche(article_id: str) -> None:

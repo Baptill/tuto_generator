@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Composeur de tutoriels — tuto-generator</title>
+    <link rel="stylesheet" href="/ui/composeur.css" />
+  </head>
+  <body>
+    <header class="barre">
+      <div class="barre-titre">
+        <strong>Composeur</strong>
+        <span id="article-id" class="pastille"></span>
+      </div>
+      <div class="barre-actions">
+        <span id="etat-sauvegarde" class="etat-sauvegarde"></span>
+        <select id="choix-article" title="Ouvrir un tutoriel, ou en démarrer un nouveau"></select>
+        <button id="btn-enregistrer" class="primaire">Enregistrer &amp; générer</button>
+      </div>
+    </header>
+
+    <main class="colonnes">
+      <!-- ------------------------------------------------ saisie -->
+      <section class="panneau-saisie">
+        <div class="bloc">
+          <h2>En-tête du tutoriel</h2>
+          <label>Titre
+            <input id="f-titre" type="text" placeholder="Accéder à la surveillance du bilan" />
+          </label>
+          <label>Sous-titre
+            <input id="f-resume" type="text" placeholder="Guide pas à pas pour…" />
+          </label>
+          <label>Auteur
+            <input id="f-auteur" type="text" placeholder="Prénom Nom" />
+          </label>
+          <div class="champ">
+            <span class="label">Prérequis</span>
+            <div id="liste-prerequis" class="liste-prerequis"></div>
+            <button id="btn-prerequis" class="lien">+ Ajouter un prérequis</button>
+          </div>
+        </div>
+
+        <div class="bloc">
+          <div class="bloc-entete">
+            <h2>Sections</h2>
+            <span id="compteur-pages" class="pastille"></span>
+          </div>
+          <div id="liste-sections" class="liste-sections"></div>
+          <button id="btn-ajouter-section" class="ajout">+ Ajouter une section</button>
+        </div>
+
+        <div id="avertissements" class="avertissements" hidden></div>
+      </section>
+
+      <!-- ------------------------------------------------ aperçu -->
+      <section class="panneau-apercu">
+        <div class="apercu-barre">
+          <span>Aperçu &amp; annotations</span>
+          <span id="etat-apercu" class="etat"></span>
+          <label class="zoom">Zoom
+            <input id="f-zoom" type="range" min="30" max="130" value="55" />
+          </label>
+        </div>
+        <iframe id="apercu" title="Aperçu du tutoriel"></iframe>
+      </section>
+    </main>
+
+    <!-- ------------------------------------------------ panneau catalogue -->
+    <div id="modale" class="modale" hidden>
+      <div class="modale-fond" data-fermer></div>
+      <div class="modale-boite">
+        <div class="modale-entete">
+          <h2>Choisir un modèle de section</h2>
+          <button class="fermer" data-fermer aria-label="Fermer">×</button>
+        </div>
+        <p class="aide">
+          Chaque modèle occupe un poids fixe dans la page. Une page contient 4 unités ;
+          le passage à la page suivante est automatique.
+        </p>
+        <div id="grille-layouts" class="grille-layouts"></div>
+      </div>
+    </div>
+
+    <script src="/ui/composeur.js"></script>
+  </body>
+</html>

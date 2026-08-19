@@ -77,3 +77,47 @@ def test_generate_sample_article_end_to_end():
     # Deux feuilles : sec-1(h=1)+sec-2(h=2)=3 sur page 1 (budget 3),
     # sec-3(h=2) → page 2. Chaque page est un <div class="page">.
     assert document.count('<div class="page">') == 2
+
+
+def test_hauteurs_fixes_rognent_au_lieu_de_pousser():
+    """Un en-tête chargé et une section trop longue ne doivent pas repousser la
+    mise en page : chaque bloc garde exactement son quota (CLAUDE.md §3), le
+    surplus est rogné. Sans cela, la pagination calculée par `paginate` et
+    celle du PDF divergeraient."""
+    import shutil
+
+    from weasyprint import HTML
+
+    from app.schemas import Article, BlocParagraphe, Section
+
+    article_id = "tmp-test-debordement"
+    article = Article(
+        id=article_id,
+        type="tutoriel",
+        template_id="tuto-release",
+        titre="Débordement",
+        auteur="Test",
+        resume="Un résumé volontairement long. " * 30,
+        prerequis=[f"Prérequis {i}" for i in range(12)],
+        sections=[
+            Section(
+                id="sec-1",
+                titre="Section d'une unité",
+                layout="texte-seul",
+                blocs=[BlocParagraphe(texte="Texte volontairement très long. " * 120)],
+            ),
+            Section(
+                id="sec-2",
+                titre="Section suivante",
+                layout="texte-seul",
+                blocs=[BlocParagraphe(texte="Court.")],
+            ),
+        ],
+    )
+    storage.write_article(article)
+    try:
+        result = generate_article(article_id, skip_pdf=True)
+        # 1 unité d'en-tête + 1 + 1 = 3 unités : tout tient sur une seule page.
+        assert len(HTML(filename=str(result.html_path)).render().pages) == 1
+    finally:
+        shutil.rmtree(storage.article_dir(article_id), ignore_errors=True)

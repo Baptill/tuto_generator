@@ -1,54 +1,57 @@
-id: "2026-07-exemple-tuto"
-type: "tutoriel"
-template_id: "tuto-release"
-langue: "fr"
-titre: "Accéder à la surveillance du bilan"
-resume: "Guide pas à pas pour accéder aux différentes fonctionnalités de surveillance."
-auteur: "Baptiste Lemoine"
-prerequis:
-  - Etre connecté à un compte sur l'application Syopé
-
+id: 2026-07-exemple-tuto
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: Accéder à la surveillance du bilan
+resume: Guide pas à pas pour accéder aux différentes fonctionnalités de surveillance.
+auteur: Baptiste Lemoine
 sections:
-  - id: "sec-1"
-    titre: "1 - Se diriger vers le scan d'identité"
-    layout: "etape-compacte"
-    blocs:
-      - type: "image"
-        fichier: "assets/img4.png"
-      - type: "paragraphe"
-        texte: |
-          Depuis le menu "Identité",
+- id: sec-1
+  titre: 1 - Se diriger vers le scan d'identité
+  layout: etape-compacte
+  blocs:
+  - type: image
+    fichier: assets/img4.png
+  - type: paragraphe
+    texte: |
+      Depuis le menu "Identité",
 
-          Cliquez sur le bouton "Pièce d'identité"
-
-  - id: "sec-2"
-    titre: "2 - Scanner un document"
-    layout: "triple-image"
-    blocs:
-      - type: "image"
-        fichier: "assets/img1.png"
-        legende: "1. Cliquez sur l'icône en forme de trombone présente dans l'en-tête du bilan"
-      - type: "image"
-        fichier: "assets/img2.png"
-        legende: '2. Cliquez ensuite sur "Refus de soin et/ou de transport"'
-      - type: "image"
-        fichier: "assets/img3.png"
-        legende: '3. Renseignez les champs manquants si nécessaire et cliquez sur "Renseigner"'
-
-  - id: "sec-3"
-    titre: "1 - Choisir son bilan"
-    layout: "image-gauche-texte"
-    blocs:
-      - type: "image"
-        fichier: "assets/prerequis.png"
-        legende: "Page d'accueil de l'application"
-      - type: "paragraphe"
-        texte: "Sur la page d'accueil de l'application :"
-      - type: "paragraphe"
-        texte: |
-          - (1) Sélectionnez votre intervention
-          - (2) Cliquez sur "clôturer le bilan"
-
+      Cliquez sur le bouton "Pièce d'identité"
+- id: sec-2
+  titre: 2 - Scanner un document
+  layout: triple-image
+  blocs:
+  - type: image
+    fichier: assets/img1.png
+    legende: 1. Cliquez sur l'icône en forme de trombone présente dans l'en-tête du
+      bilan
+  - type: image
+    fichier: assets/img2.png
+    legende: 2. Cliquez ensuite sur "Refus de soin et/ou de transport"
+  - type: image
+    fichier: assets/img3.png
+    legende: 3. Renseignez les champs manquants si nécessaire et cliquez sur "Renseigner"
+- id: sec-3
+  titre: 1 - Choisir son bilan
+  layout: image-gauche-texte
+  blocs:
+  - type: image
+    fichier: assets/prerequis.png
+    legende: Page d'accueil de l'application
+  - type: paragraphe
+    texte: 'Sur la page d''accueil de l''application :'
+  - type: paragraphe
+    texte: |
+      - (1) Sélectionnez votre intervention
+      - (2) Cliquez sur "clôturer le bilan"
+- id: sec-4
+  titre: Text
+  layout: texte-seul
+  blocs:
+  - type: paragraphe
+    texte: space-evenly
+prerequis:
+- Etre connecté à un compte sur l'application Syopé
 metadonnees_seo:
   slug: null
   meta_title: null

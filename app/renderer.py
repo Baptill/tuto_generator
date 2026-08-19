@@ -38,14 +38,32 @@ class RenderError(Exception):
     pass
 
 
-def _font_face_css() -> str:
+# Style écran-seulement de l'aperçu du composeur : le zoom est piloté depuis le
+# composeur (variable --apercu-zoom) plutôt que par une transformation de
+# l'<iframe>, pour que la barre d'édition et la palette gardent leur taille
+# native et restent à droite du volet (voir app/ui/composeur.js).
+_APERCU_CSS = """
+@media screen {
+  html { background: #eceef1; }
+  /* Dégage la barre d'édition (fixée en haut à droite) du haut de la 1re page. */
+  body { padding-top: 40px; }
+  .page { zoom: var(--apercu-zoom, 1); }
+}
+"""
+
+
+def _font_face_css(charte_base: str | None = None) -> str:
+    """`charte_base` sert l'aperçu du composeur : servi en http://, le
+    navigateur refuse les `file://` du build. Par défaut (CLI, PDF), on garde
+    les chemins absolus du disque — WeasyPrint n'a pas de serveur."""
     faces = []
     for famille, style, weight, fichier in _FONT_FACES:
         path = CHARTE_FONTS_DIR / fichier
         if path.is_file():
+            src = f"{charte_base}fonts/{fichier}" if charte_base else path.as_uri()
             faces.append(
                 f"@font-face{{font-family:'{famille}';font-style:{style};"
-                f"font-weight:{weight};src:url('{path.as_uri()}');}}"
+                f"font-weight:{weight};src:url('{src}');}}"
             )
     return "".join(faces)
 
@@ -65,7 +83,7 @@ def _typo_rules(selector: str, stylo: StyleTypo, couleur_fallback: str) -> str:
     return f"{selector}{{{';'.join(props)};}}"
 
 
-def _charte_css(charte: Charte) -> str:
+def _charte_css(charte: Charte, charte_base: str | None = None) -> str:
     """Génère le bloc CSS injecté depuis la charte : @page, @font-face,
     variables `:root` et règles des styles nommés (typographie)."""
     c = charte.couleurs
@@ -97,7 +115,7 @@ def _charte_css(charte: Charte) -> str:
         _typo_rules(".prerequis-item", p.prerequis_item, c.texte),
     ])
 
-    return _font_face_css() + root_vars + typo
+    return _font_face_css(charte_base) + root_vars + typo
 
 
 def _header_html(article: Article, logo_uri: str | None) -> str:
@@ -185,33 +203,73 @@ def _pages_html(
     return "".join(out)
 
 
+def _editeur_et_apercu(
+    article_id: str, avec_editeur: bool, api_url: str | None, apercu: bool
+) -> str:
+    """Fragment de fin de `<body>` : surface d'édition, plus le style d'aperçu
+    quand le rendu est affiché dans le composeur. Ce style est ajouté ici plutôt
+    que dans les templates pour qu'aucun template n'ait à connaître le
+    composeur."""
+    fragment = ""
+    if avec_editeur:
+        fragment += editeur_html(
+            article_id=article_id,
+            api_url=api_url,
+            regenerer=bool(api_url),
+            # Dans le composeur, c'est « Enregistrer & générer » qui persiste
+            # la source *et* les calques : pas de second bouton dans l'aperçu.
+            avec_enregistrement=not api_url,
+        )
+    if apercu:
+        fragment += f'\n<style id="apercu-css">{_APERCU_CSS}</style>'
+    return fragment
+
+
 def render_article(
     article: Article,
     config: TemplateConfig,
     charte: Charte,
     template_path: Path,
     article_dir: Path,
-    output_path: Path,
+    output_path: Path | None,
     retouches: Retouches | None = None,
-) -> Path:
-    """Rend `article` avec `template_path` (HTML/Jinja) + `charte`, écrit le
-    HTML dans `output_path`. Les chemins d'image du content.yaml sont relatifs
-    à `article_dir` (résolus via <base href>)."""
+    base_href: str | None = None,
+    charte_base: str | None = None,
+    avec_editeur: bool = True,
+    editeur_api_url: str | None = None,
+    apercu: bool = False,
+) -> str:
+    """Rend `article` avec `template_path` (HTML/Jinja) + `charte`, et écrit le
+    HTML dans `output_path` (sauf si None). Retourne le HTML produit.
+
+    Les chemins d'image du content.yaml sont relatifs à `article_dir` (résolus
+    via <base href>). `base_href`/`charte_base`/`avec_editeur` ne servent qu'à
+    l'aperçu du composeur (servi en http://, sans barre d'édition) ; le build
+    de production garde les valeurs par défaut.
+    """
     template = Template(template_path.read_text(encoding="utf-8"), autoescape=True)
 
     logo_path = VAULT_ROOT / "charte" / (charte.logo or "")
-    logo_uri = logo_path.as_uri() if charte.logo and logo_path.is_file() else None
+    if not (charte.logo and logo_path.is_file()):
+        logo_uri = None
+    elif charte_base:
+        logo_uri = f"{charte_base}{charte.logo}"
+    else:
+        logo_uri = logo_path.as_uri()
 
     html = template.render(
         article=article,
-        charte_css=_charte_css(charte),
-        base_href=article_dir.as_uri() + "/",
+        charte_css=_charte_css(charte, charte_base),
+        base_href=base_href or (article_dir.as_uri() + "/"),
         pages_html=_pages_html(
             article, config, article_dir, logo_uri, retouches or Retouches()
         ),
-        editeur_html=editeur_html(article_id=article_dir.name),
+        editeur_html=_editeur_et_apercu(
+            article_dir.name, avec_editeur, editeur_api_url, apercu
+        ),
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html, encoding="utf-8")
-    return output_path
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(html, encoding="utf-8")
+    return html

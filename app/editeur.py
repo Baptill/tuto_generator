@@ -27,6 +27,22 @@ Deux blocs de style distincts :
 """
 from __future__ import annotations
 
+import re
+
+_SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.IGNORECASE | re.DOTALL)
+_HANDLER_RE = re.compile(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.IGNORECASE)
+
+
+def assainir_html(html: str) -> str:
+    """Retire scripts et gestionnaires d'événements du contenu d'un calque.
+
+    Ce contenu est saisi dans le navigateur puis réinjecté à chaque build : il
+    passe par ici avant d'être persisté dans `retouches.yaml`, quel que soit le
+    chemin d'enregistrement (aperçu du composeur ou HTML autonome).
+    """
+    return _HANDLER_RE.sub("", _SCRIPT_RE.sub("", html))
+
+
 # ---------------------------------------------------------------------------
 # Catalogue des calques insérables
 # ---------------------------------------------------------------------------
@@ -44,7 +60,7 @@ _PALETTE_GROUPES = [
     ]),
     ("Média & mise en page", [
         ("image", "🖼 Image…"),
-        ("etape-compacte", "⬛ Image + texte"),
+        ("etape-compacte", "◧ Image + texte"),
         ("colonnes", "◫ Deux colonnes"),
         ("separateur", "— Séparateur"),
     ]),
@@ -79,6 +95,7 @@ def _palette_html() -> str:
     )
     return (
         '<div class="editor-palette" id="editeur-palette" hidden>'
+        '<p class="pal-entete">Ajouter un élément</p>'
         + "".join(groupes)
         + aide
         + "</div>"
@@ -86,36 +103,72 @@ def _palette_html() -> str:
 
 
 _EDITEUR_CSS = """
+/* Chrome de l'éditeur — aligné sur l'UI du composeur (app/ui/composeur.css) :
+   mêmes gris, même accent, mêmes rayons et ombres. Les jetons sont portés par
+   les éléments de chrome plutôt que par `:root`, pour ne pas se mêler aux
+   variables de charte du document (--couleur-*), qui, elles, habillent
+   l'article rendu. */
+.editor-bar, .editor-palette, .editeur-toast {
+  --ui-fond: #ffffff;
+  --ui-fond-doux: #f6f7f9;
+  --ui-fond-actif: #eceef1;
+  --ui-bord: #d8dce1;
+  --ui-gris: #9aa3ad;
+  --ui-texte-doux: #444c55;
+  --ui-texte: #1d2229;
+  --ui-accent: #2f6df6;
+  --ui-danger: #c0392b;
+  --ui-rayon: 8px;
+  --ui-ombre: 0 1px 2px rgba(20, 25, 32, .08), 0 4px 12px rgba(20, 25, 32, .06);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--ui-texte);
+}
+
 .editor-bar {
-  display: flex; position: fixed; top: 10px; right: 10px; gap: 8px;
-  z-index: 9999; font-family: "Inter", sans-serif;
+  display: flex; position: fixed; top: 12px; right: 12px; gap: 8px; z-index: 9999;
 }
-.editor-bar button, .editor-palette button {
-  font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer;
-  border: 1px solid #ccc; border-radius: 6px; background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+.editor-bar button {
+  font: 500 13px/1.45 inherit; padding: 7px 12px; cursor: pointer;
+  border: 1px solid var(--ui-bord); border-radius: var(--ui-rayon);
+  background: var(--ui-fond); color: var(--ui-texte); box-shadow: var(--ui-ombre);
 }
-.editor-bar button.on { background: var(--couleur-primaire); color: #fff; border-color: transparent; }
+.editor-bar button:hover { background: var(--ui-fond-doux); }
+.editor-bar button.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #fff; }
+.editor-bar button.on:hover { filter: brightness(1.06); }
 .editor-bar button[disabled] { opacity: .45; cursor: default; }
 
-/* Palette : sous les boutons de la barre, même colonne à droite. */
+/* Palette : carte posée sous la barre, même colonne à droite. */
 .editor-palette {
-  position: fixed; top: 48px; right: 10px; width: 210px; z-index: 9999;
-  font-family: "Inter", sans-serif; background: #fff; border: 1px solid #ddd;
-  border-radius: 8px; padding: 8px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  max-height: calc(100vh - 70px); overflow: auto;
+  position: fixed; top: 54px; right: 12px; width: 226px; z-index: 9999;
+  background: var(--ui-fond); border: 1px solid var(--ui-bord);
+  border-radius: 10px; padding: 12px; box-shadow: var(--ui-ombre);
+  max-height: calc(100vh - 76px); overflow: auto;
 }
 .editor-palette[hidden] { display: none; }
-.pal-groupe { margin-bottom: 8px; }
-.pal-titre {
-  display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
-  color: #888; margin-bottom: 4px;
+.pal-entete {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ui-texte-doux); margin: 0 0 10px;
 }
-.pal-boutons { display: flex; flex-wrap: wrap; gap: 4px; }
-.editor-palette button { font-size: 12px; padding: 4px 8px; box-shadow: none; text-align: left; }
-.editor-palette button:hover { background: #f2f2f2; }
-.editor-palette button[data-module="supprimer"]:hover { background: #fbeaea; border-color: #c62828; }
-.pal-aide { margin: 4px 0 0; font-size: 10px; line-height: 1.35; color: #999; }
+.pal-groupe { margin-bottom: 12px; }
+.pal-groupe:last-of-type { margin-bottom: 6px; }
+.pal-titre {
+  display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ui-gris); margin-bottom: 5px;
+}
+.pal-boutons { display: flex; flex-wrap: wrap; gap: 5px; }
+.editor-palette button {
+  font: 400 12px/1.35 inherit; padding: 5px 9px; cursor: pointer; text-align: left;
+  border: 1px solid var(--ui-bord); border-radius: 6px;
+  background: var(--ui-fond); color: var(--ui-texte);
+}
+.editor-palette button:hover { background: var(--ui-fond-doux); border-color: var(--ui-accent); color: var(--ui-accent); }
+.editor-palette button[data-module="supprimer"]:hover {
+  background: #fdecea; border-color: var(--ui-danger); color: var(--ui-danger);
+}
+.pal-aide {
+  margin: 0; padding-top: 10px; border-top: 1px solid var(--ui-fond-actif);
+  font-size: 10px; line-height: 1.4; color: var(--ui-gris);
+}
 
 /* Repère du point de pose (dernier clic dans la page). Écran uniquement. */
 .pose-repere {
@@ -125,22 +178,23 @@ _EDITEUR_CSS = """
 }
 
 /* --- Chrome de manipulation des calques (mode édition uniquement) --------- */
-body.mode-edition .calque { outline: 1px dashed rgba(0, 0, 0, .18); }
-body.mode-edition .calque.selection { outline: 2px solid var(--couleur-lisere); }
-.calque-outils { position: absolute; top: -10px; left: -10px; display: none; gap: 2px; z-index: 9; }
+body.mode-edition .calque { outline: 1px dashed rgba(20, 25, 32, .18); }
+body.mode-edition .calque.selection { outline: 2px solid #2f6df6; }
+.calque-outils { position: absolute; top: -11px; left: -11px; display: none; gap: 3px; z-index: 9; }
 body.mode-edition .calque:hover > .calque-outils,
 body.mode-edition .calque.selection > .calque-outils { display: flex; }
 .calque-outils span {
-  width: 18px; height: 18px; border-radius: 4px; background: #fff;
-  border: 1px solid #bbb; box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
-  font: 11px/16px sans-serif; text-align: center; color: #444;
+  width: 19px; height: 19px; border-radius: 6px; background: #fff;
+  border: 1px solid #d8dce1; box-shadow: 0 1px 2px rgba(20, 25, 32, .12);
+  font: 11px/17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: center; color: #444c55;
 }
 .calque-grip { cursor: move; }
 .calque-fermer { cursor: pointer; }
-.calque-fermer:hover { background: #fbeaea; border-color: #c62828; color: #c62828; }
+.calque-fermer:hover { background: #fdecea; border-color: #c0392b; color: #c0392b; }
 .calque-poignee {
   position: absolute; width: 11px; height: 11px; border-radius: 999px;
-  background: #fff; border: 2px solid var(--couleur-lisere);
+  background: #fff; border: 2px solid #2f6df6;
   cursor: nwse-resize; z-index: 9; display: none;
 }
 body.mode-edition .calque:hover > .calque-poignee,
@@ -150,11 +204,12 @@ body.mode-edition .calque.selection > .calque-poignee { display: block; }
 /* Retour d'enregistrement (écrasement du HTML + régénération du PDF). */
 .editeur-toast {
   position: fixed; bottom: 14px; right: 14px; max-width: 420px; z-index: 10000;
-  padding: 9px 13px; border-radius: 7px; font: 13px/1.4 "Inter", sans-serif;
-  color: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+  padding: 10px 13px; border-radius: var(--ui-rayon); border: 1px solid var(--ui-bord);
+  background: var(--ui-fond); font-size: 13px; line-height: 1.4;
+  box-shadow: var(--ui-ombre);
 }
-.editeur-toast.toast-ok { background: #2e7d32; }
-.editeur-toast.toast-ko { background: #c62828; }
+.editeur-toast.toast-ok { background: #eef8ef; border-color: #b6ddb9; }
+.editeur-toast.toast-ko { background: #fdecea; border-color: #e3b2ab; }
 
 @media print {
   .editor-bar, .editor-palette, .pose-repere, .editeur-toast { display: none !important; }
@@ -234,6 +289,11 @@ _SCRIPT = r"""
   // Endpoint d'écrasement, injecté au build (app/serveur.py). Conservé dans le
   // fichier écrit : un HTML rouvert sait toujours où s'enregistrer.
   var API_ENREGISTREMENT = "__API_ENREGISTREMENT__";
+  // Mode « aperçu du composeur » : le document affiché pointe vers /vault en
+  // http:// et son texte vient du formulaire. On ne persiste donc pas le DOM
+  // — on n'envoie que les calques, et le serveur régénère output/article.html
+  // depuis content.yaml + retouches.yaml (chemins locaux, PDF correct).
+  var REGENERER = __REGENERER__;
 
   // ---------------------------------------------------------------------
   // Catalogue : contenu HTML, largeur/hauteur par défaut (% de la page) et
@@ -306,6 +366,12 @@ _SCRIPT = r"""
     if (histo.length > MAX_HISTO) histo.shift();
     majBoutonAnnuler();
   }
+
+  // Exposée : le composeur s'en sert pour ne pas quitter un tutoriel en
+  // laissant tomber des annotations posées mais pas encore enregistrées.
+  window.retouchesTouchees = function () {
+    return histo.length > 0;
+  };
 
   function annuler() {
     if (!histo.length) return;
@@ -427,6 +493,10 @@ _SCRIPT = r"""
 
   // Représentation structurée des calques, envoyée au serveur pour être
   // persistée dans retouches.yaml (source des retouches, hors content.yaml).
+  // Exposée : le composeur récupère les calques de l'aperçu au moment
+  // d'« Enregistrer & générer » (app/ui/composeur.js).
+  window.collecterCalques = collecterCalques;
+
   function collecterCalques() {
     var pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
     return Array.prototype.map.call(document.querySelectorAll(".calque"), function (c) {
@@ -609,7 +679,11 @@ _SCRIPT = r"""
     fetch(API_ENREGISTREMENT, {
       method: "POST",
       headers: { "Content-Type": "application/json;charset=utf-8" },
-      body: JSON.stringify({ html: "<!DOCTYPE html>\n" + clone.outerHTML, calques: calques }),
+      body: JSON.stringify({
+        html: "<!DOCTYPE html>\n" + clone.outerHTML,
+        calques: calques,
+        regenerer: REGENERER,
+      }),
     })
       .then(function (r) {
         return r.json().then(function (d) {
@@ -618,9 +692,10 @@ _SCRIPT = r"""
         });
       })
       .then(function (d) {
+        var quoi = REGENERER ? "Document régénéré" : "HTML écrasé";
         toast(d.pdf_erreur
-          ? "HTML écrasé. PDF non régénéré : " + d.pdf_erreur
-          : "HTML écrasé, PDF régénéré, " + d.calques + " calque(s) enregistré(s).",
+          ? quoi + ". PDF non régénéré : " + d.pdf_erreur
+          : quoi + ", PDF régénéré, " + d.calques + " calque(s) enregistré(s).",
           !d.pdf_erreur);
       })
       .catch(function (err) {
@@ -662,24 +737,47 @@ _SCRIPT = r"""
 """
 
 
-def editeur_html(article_id: str, port: int | None = None) -> str:
+def editeur_html(
+    article_id: str,
+    port: int | None = None,
+    api_url: str | None = None,
+    regenerer: bool = False,
+    avec_enregistrement: bool = True,
+) -> str:
     """Fragment injecté en fin de `<body>` : styles, barre, palette, script.
 
     `article_id` cible l'endpoint d'écrasement du service local : le bouton
     « Enregistrer HTML » réécrit output/article.html du même article et
     relance la conversion PDF (voir app/serveur.py).
+
+    `api_url` (avec `regenerer=True`) sert l'aperçu du composeur : le document
+    affiché y est un rendu de travail (URL http://, texte piloté par le
+    formulaire), donc seuls les calques sont persistés — le serveur reconstruit
+    ensuite l'artefact depuis `content.yaml` + `retouches.yaml`.
+
+    `avec_enregistrement=False` retire le bouton « Enregistrer HTML » : dans le
+    composeur, c'est « Enregistrer & générer » qui écrit la source *et* les
+    calques. Le HTML autonome, lui, le garde — c'est sa seule façon de
+    persister une retouche.
     """
     from app.serveur_config import PORT_DEFAUT
 
-    api = f"http://127.0.0.1:{port or PORT_DEFAUT}/articles/{article_id}/html"
-    script = _SCRIPT.replace("__API_ENREGISTREMENT__", api)
+    api = api_url or f"http://127.0.0.1:{port or PORT_DEFAUT}/articles/{article_id}/html"
+    script = _SCRIPT.replace("__API_ENREGISTREMENT__", api).replace(
+        "__REGENERER__", "true" if regenerer else "false"
+    )
+    enregistrer = (
+        '<button onclick="enregistrerHTML(this)">💾 Enregistrer HTML</button>'
+        if avec_enregistrement
+        else ""
+    )
     return (
         f'<style id="editeur-css">{_EDITEUR_CSS}</style>\n'
         f'<style id="modules-css">{_MODULES_CSS}</style>\n'
         '<div class="editor-bar">'
         '<button id="btn-edit" onclick="toggleEdit(this)">✏️ Mode édition</button>'
         '<button id="btn-annuler" onclick="annulerAction()" disabled>↩ Annuler</button>'
-        '<button onclick="enregistrerHTML(this)">💾 Enregistrer HTML</button>'
+        f"{enregistrer}"
         "</div>\n"
         f"{_palette_html()}\n"
         f"<script>{script}</script>"

@@ -1,0 +1,10 @@
+version: 1
+calques:
+- ancre_section: sec-1
+  page: 0
+  classes: calque calque-encadre-astuce
+  style: 'left: 45.24%; top: 1.96%; width: 45%;'
+  texte: true
+  redim: boite
+  html: '<div class="encadre encadre-astuce" style="margin:0"><p class="encadre-texte">Astuce
+    : Saisir le texte…</p></div>'

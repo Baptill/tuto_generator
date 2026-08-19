@@ -1,0 +1,279 @@
+/* Composeur — chrome de l'outil de saisie.
+   Volontairement neutre : la charte de marque s'applique à l'article rendu
+   dans l'aperçu, pas à l'outil (CLAUDE.md §3). */
+
+:root {
+  --gris-0: #ffffff;
+  --gris-1: #f6f7f9;
+  --gris-2: #eceef1;
+  --gris-3: #d8dce1;
+  --gris-4: #9aa3ad;
+  --gris-6: #444c55;
+  --gris-8: #1d2229;
+  --accent: #2f6df6;
+  --danger: #c0392b;
+  --rayon: 8px;
+  --ombre: 0 1px 2px rgba(20, 25, 32, 0.08), 0 4px 12px rgba(20, 25, 32, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--gris-8);
+  background: var(--gris-1);
+}
+
+/* ------------------------------------------------------------- barre haute */
+.barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--gris-0);
+  border-bottom: 1px solid var(--gris-3);
+}
+.barre-titre { display: flex; align-items: center; gap: 10px; }
+.etat-sauvegarde { font-size: 12px; color: var(--gris-4); white-space: nowrap; }
+.barre-actions { display: flex; align-items: center; gap: 8px; }
+
+.pastille {
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--gris-6);
+  background: var(--gris-2);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--rayon);
+  border: 1px solid var(--gris-3);
+  background: var(--gris-0);
+  padding: 7px 12px;
+}
+button:hover { background: var(--gris-1); }
+button.primaire { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primaire:hover { filter: brightness(1.06); }
+button.lien {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 4px 0;
+}
+button.ajout {
+  width: 100%;
+  padding: 12px;
+  border-style: dashed;
+  color: var(--gris-6);
+  font-weight: 600;
+}
+button.ajout:hover { border-color: var(--accent); color: var(--accent); }
+
+select, input[type="text"], textarea {
+  font: inherit;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--gris-3);
+  border-radius: var(--rayon);
+  background: var(--gris-0);
+  color: inherit;
+}
+textarea { resize: vertical; min-height: 62px; }
+select { width: auto; max-width: 240px; }
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid rgba(47, 109, 246, 0.35);
+  border-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- colonnes */
+.colonnes {
+  display: grid;
+  /* Le volet de saisie est borné pour que l'aperçu — et la palette
+     d'annotations qui vit à sa droite — gardent toujours de la place. */
+  grid-template-columns: clamp(360px, 40%, 560px) 1fr;
+  gap: 0;
+  height: calc(100vh - 53px);
+}
+.panneau-saisie { overflow-y: auto; padding: 16px; }
+.panneau-apercu {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--gris-3);
+  background: var(--gris-2);
+  min-width: 0;
+}
+
+.bloc {
+  background: var(--gris-0);
+  border: 1px solid var(--gris-3);
+  border-radius: var(--rayon);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.bloc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gris-6); margin: 0 0 12px; }
+.bloc-entete { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.bloc-entete h2 { margin: 0; }
+
+label, .champ { display: block; margin-bottom: 10px; font-size: 13px; color: var(--gris-6); }
+label input, label textarea { margin-top: 4px; }
+.champ .label { display: block; margin-bottom: 4px; }
+
+.liste-prerequis { display: flex; flex-direction: column; gap: 6px; }
+.ligne-prerequis { display: flex; gap: 6px; align-items: center; }
+
+/* ---------------------------------------------------------------- sections */
+.liste-sections { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+
+.carte-section {
+  border: 1px solid var(--gris-3);
+  border-radius: var(--rayon);
+  background: var(--gris-1);
+}
+.carte-section.active { border-color: var(--accent); }
+.carte-entete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.carte-entete .nom { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carte-entete .poids { font-size: 11px; color: var(--gris-6); background: var(--gris-2); border-radius: 999px; padding: 2px 8px; }
+.carte-entete .mini-wire { width: 34px; height: 26px; flex: none; }
+.carte-corps { padding: 4px 12px 12px; border-top: 1px solid var(--gris-3); background: var(--gris-0); }
+.carte-outils { display: flex; gap: 4px; }
+.carte-outils button { padding: 2px 7px; line-height: 1.2; }
+.carte-outils button.suppr:hover { color: var(--danger); border-color: var(--danger); }
+
+.groupe { margin-top: 12px; }
+.groupe > .titre-groupe {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--gris-4); margin-bottom: 6px;
+}
+.entree { position: relative; margin-bottom: 10px; }
+.entree .retirer {
+  position: absolute; top: 0; right: 0;
+  border: none; background: none; color: var(--gris-4); padding: 0 2px;
+}
+.entree .retirer:hover { color: var(--danger); }
+
+/* Uploader d'image */
+.uploader {
+  display: flex; gap: 10px; align-items: center;
+  border: 1px dashed var(--gris-3); border-radius: var(--rayon);
+  padding: 8px; background: var(--gris-1);
+}
+.uploader.pleine { border-style: solid; background: var(--gris-0); }
+.uploader .vignette {
+  width: 84px; height: 60px; flex: none;
+  border-radius: 4px; background: var(--gris-2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gris-4); font-size: 11px; overflow: hidden;
+}
+.uploader .vignette img { width: 100%; height: 100%; object-fit: cover; }
+.uploader .corps { flex: 1; min-width: 0; }
+.uploader .nom-fichier { font-size: 12px; color: var(--gris-6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uploader input[type="file"] { display: none; }
+
+/* ------------------------------------------------------------- catalogue */
+.modale[hidden] { display: none; }
+.modale { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modale-fond { position: absolute; inset: 0; background: rgba(20, 25, 32, 0.45); }
+.modale-boite {
+  position: relative;
+  width: min(980px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--gris-0);
+  border-radius: 12px;
+  box-shadow: var(--ombre);
+  padding: 18px 20px 22px;
+}
+.modale-entete { display: flex; align-items: center; justify-content: space-between; }
+.modale-entete h2 { margin: 0; font-size: 17px; }
+.fermer { border: none; background: none; font-size: 22px; line-height: 1; color: var(--gris-4); }
+.aide { color: var(--gris-6); font-size: 13px; margin: 6px 0 16px; }
+
+.grille-layouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.carte-layout {
+  border: 1px solid var(--gris-3);
+  border-radius: var(--rayon);
+  padding: 10px;
+  background: var(--gris-0);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.carte-layout:hover { border-color: var(--accent); box-shadow: var(--ombre); }
+.carte-layout .cadre-wire {
+  background: var(--gris-1);
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 116px;
+}
+.carte-layout .nom { font-weight: 600; }
+.carte-layout .desc { font-size: 12px; color: var(--gris-6); }
+.carte-layout .poids {
+  align-self: flex-start;
+  font-size: 11px; font-weight: 600;
+  color: var(--gris-6); background: var(--gris-2);
+  border-radius: 999px; padding: 2px 8px;
+}
+
+/* Wireframes : gris uniquement, on montre l'architecture, pas le contenu. */
+svg.wireframe { width: 100%; height: auto; max-height: 190px; display: block; }
+svg.wireframe .wf-titre { fill: #b9c0c8; }
+svg.wireframe .wf-texte { fill: #d5dae0; }
+svg.wireframe .wf-image { fill: #c6ccd3; }
+svg.wireframe .wf-image-icone { fill: #aeb6bf; }
+svg.wireframe .wf-lisere { fill: #9aa3ad; }
+svg.wireframe .wf-encadre { fill: #e2e6ea; stroke: #c6ccd3; stroke-width: 0.7; }
+
+/* --------------------------------------------------------------- aperçu */
+.apercu-barre {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; background: var(--gris-0);
+  border-bottom: 1px solid var(--gris-3);
+  font-size: 13px; color: var(--gris-6);
+}
+.apercu-barre .etat { flex: 1; color: var(--gris-4); font-size: 12px; }
+.zoom { display: flex; align-items: center; gap: 6px; margin: 0; }
+.zoom input { width: 110px; }
+
+/* L'aperçu occupe tout le volet et se met à l'échelle *à l'intérieur* (zoom
+   CSS sur les pages, piloté par --apercu-zoom) : la barre d'édition et la
+   palette d'annotations gardent ainsi leur taille native, à droite du volet,
+   comme dans le HTML ouvert seul. */
+#apercu {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: var(--gris-2);
+  display: block;
+}
+
+.avertissements {
+  border: 1px solid #f0d38a;
+  background: #fdf6e3;
+  border-radius: var(--rayon);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.avertissements ul { margin: 6px 0 0; padding-left: 18px; }
+.avertissements.erreur { border-color: #e3b2ab; background: #fdecea; }
+.avertissements.succes { border-color: #b6ddb9; background: #eef8ef; }
+.avertissements.succes li { word-break: break-all; }

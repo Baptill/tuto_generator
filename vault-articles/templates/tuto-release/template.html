@@ -44,14 +44,18 @@
         margin-bottom: 1mm;
       }
 
-      /* En-tête du document (occupe ~1 unité, réservée par la pagination).
-     Espacement en padding interne (inclus dans min-height via border-box) et
-     non en margin externe : sinon la somme des blocs dépasse la page utile. */
+      /* En-tête du document : exactement 1 unité, la hauteur réservée par la
+     pagination — `height` et non `min-height`, sinon un résumé long ou une
+     liste de prérequis fournie repousserait la première section hors de son
+     quota. Le contenu se répartit dans cette hauteur (space-evenly) et ce qui
+     déborderait est rogné. Espacement en padding interne (inclus dans la
+     hauteur via border-box) et non en margin externe. */
       .doc-header {
         display: flex;
         flex-direction: column;
         justify-content: space-evenly;
-        min-height: var(--unit-height);
+        height: var(--unit-height);
+        overflow: hidden;
         padding-bottom: 10mm;
       }
       .doc-header .logo {
@@ -67,21 +71,27 @@
         padding-left: 5mm;
       }
 
-      /* Grille des 4 hauteurs : chaque section occupe au moins son quota.
+      /* Grille des 4 hauteurs : chaque section occupe **exactement** son quota,
+     ni plus ni moins. `height` (et non `min-height`) garantit deux choses :
+     une section ne s'étire jamais pour occuper la place restante de la page,
+     et elle ne déborde jamais sur le quota de la suivante — les sections se
+     posent donc bout à bout, en haut de page, dans l'ordre du content.yaml.
+     Ce qui dépasserait est rogné (overflow), jamais repoussé.
      (Layouts multi-colonnes en display:table — support print robuste dans
      WeasyPrint, contrairement à flexbox.) */
       .sec {
-        min-height: var(--unit-height);
+        height: var(--unit-height);
+        overflow: hidden;
         padding: 2mm 0;
       }
       .sec.h2 {
-        min-height: calc(var(--unit-height) * 2);
+        height: calc(var(--unit-height) * 2);
       }
       .sec.h3 {
-        min-height: calc(var(--unit-height) * 3);
+        height: calc(var(--unit-height) * 3);
       }
       .sec.h4 {
-        min-height: calc(var(--unit-height) * 4);
+        height: calc(var(--unit-height) * 4);
       }
 
       /* Chaque page rendue est un div .page. À l'impression, une feuille physique. */

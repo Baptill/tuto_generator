@@ -4,7 +4,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help venv install test generate generate-html generate-all pdf open init clean
+.PHONY: help venv install test generate generate-html generate-all pdf serve ui open init clean
 
 ARTICLE ?= 2026-07-exemple-tuto
 
@@ -46,6 +46,12 @@ generate-all: install ## Régénère TOUS les articles (à lancer après un chan
 
 pdf: install ## Reconvertit le HTML existant en PDF (utile après retouche navigateur)
 	$(PYTHON) -m app.cli pdf $(ARTICLE)
+
+serve: install ## Lance le composeur + le service d'enregistrement des retouches
+	$(PYTHON) -m app.cli serve
+
+ui: install ## Lance le composeur et l'ouvre dans le navigateur
+	@($(PYTHON) -m app.cli serve &) ; sleep 2 ; open http://127.0.0.1:8765/
 
 open: ## Ouvre le HTML généré dans le navigateur par défaut
 	open vault-articles/articles/$(ARTICLE)/output/article.html

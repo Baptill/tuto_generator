@@ -61,10 +61,27 @@ def _load_yaml(path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
+class _Dumper(yaml.SafeDumper):
+    """Dumper YAML du projet : les textes multilignes sortent en bloc (`|`).
+
+    `content.yaml` est relu et édité à la main autant qu'il est écrit par
+    l'outil : un paragraphe doit y rester lisible, pas s'aplatir en chaîne
+    échappée sur une ligne.
+    """
+
+
+def _representer_str(dumper: yaml.SafeDumper, valeur: str):
+    style = "|" if "\n" in valeur.rstrip("\n") else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", valeur, style=style)
+
+
+_Dumper.add_representer(str, _representer_str)
+
+
 def _dump_yaml(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+        yaml.dump(data, f, Dumper=_Dumper, allow_unicode=True, sort_keys=False)
 
 
 def load_article(article_id: str) -> tuple[Article, bytes]:
@@ -144,3 +161,31 @@ def write_meta_model(meta: Meta) -> Meta:
     ex. le marqueur de retouche HTML posé par le serveur d'édition)."""
     _dump_yaml(meta_path(meta.id), meta.model_dump(mode="json"))
     return meta
+
+
+def write_article(article: Article) -> Path:
+    """Écrit `content.yaml` — seule voie d'écriture de la source de vérité
+    (le composeur passe par ici, jamais par l'artefact rendu ; CLAUDE.md §2).
+
+    Les champs optionnels non renseignés des sections et des blocs sont omis
+    (`legende: null`, `largeur_mm: null`…) : le fichier reste aussi lisible
+    qu'écrit à la main. Les clés de premier niveau, elles, sont conservées même
+    vides — `metadonnees_seo` et `liens_internes` sont des emplacements réservés
+    aux Étapes 5-6 (CLAUDE.md §4).
+    """
+    data = article.model_dump(mode="json")
+    for section in data.get("sections", []):
+        if section.get("titre") is None:
+            section.pop("titre", None)
+        section["blocs"] = [
+            {k: v for k, v in bloc.items() if v is not None} for bloc in section.get("blocs", [])
+        ]
+    _dump_yaml(content_path(article.id), data)
+    return content_path(article.id)
+
+
+def list_article_ids() -> list[str]:
+    base = VAULT_ROOT / "articles"
+    if not base.is_dir():
+        return []
+    return sorted(d.name for d in base.iterdir() if (d / "content.yaml").is_file())

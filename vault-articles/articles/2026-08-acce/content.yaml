@@ -1,0 +1,42 @@
+id: 2026-08-acce
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: Accéder à la surveillance du bilan
+resume: 'L’accès à la surveillance peut se faire à quatre endroits différents :'
+auteur: Lemonnier Baptistr
+sections:
+- id: sec-1
+  titre: 1 - chapitre test
+  layout: image-gauche-texte
+  blocs:
+  - type: image
+    fichier: assets/1685115552840.jpg
+    legende: Ma photo
+  - type: paragraphe
+    texte: dustry. Lorem Ipsum has been the industry's standard dummy text ever since
+      1966, when designers at Letraset and James Mosley, the librarian at St Bride
+      Printing Library in London, took a 1914 Cicero translation and scrambled it
+      to make dummy text for Letraset's Body Type sheets. It has survived not only
+      many decades, but also the leap into electronic typesetting, remaining essentially
+      unchanged. It was popularised thanks to
+- id: sec-2
+  titre: 2 - chapitre 2
+  layout: texte-seul
+  blocs:
+  - type: paragraphe
+    texte: dustry. Lorem Ipsum has been the industry's standard dummy text ever since
+      1966, when designers at Letraset and James Mosley, the librarian at St Bride
+      Printing Library in London, took a 1914 Cicero translation and scrambled it
+      to make dummy text for Letraset's Body Type sheets. It has survived not only
+      many decades, but also the leap into electronic typesetting, remaining essentially
+      unchanged. It was popularised thanks to
+prerequis:
+- 'Test1 '
+- Test 2
+metadonnees_seo:
+  slug: null
+  meta_title: null
+  meta_description: null
+  mots_cles: []
+liens_internes: []

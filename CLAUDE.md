@@ -55,7 +55,65 @@ Trois règles gouvernent cette surface :
 
 « Enregistrer HTML » n'est pas un « enregistrer sous » : il **écrase `output/article.html`** et **régénère le PDF**, via le service local `app/serveur.py` (`python -m app.cli serve`). Le fichier écrit conserve la barre d'édition (masquée à l'impression, ignorée par WeasyPrint) et reste donc ré-éditable.
 
+Depuis l'aperçu du composeur, l'enregistrement bascule en mode **`regenerer`** : le document affiché y est un rendu de travail (URL `http://`, texte piloté par le formulaire) qu'il ne faut pas figer dans `output/`. Seuls les calques sont alors persistés, et l'artefact est **reconstruit depuis `content.yaml` + `retouches.yaml`** — chemins locaux, PDF correct, annotations conservées.
+
+Le chrome de l'éditeur (barre, palette, poignées) reprend les jetons visuels du composeur — gris, accent, rayons, ombres — portés par les éléments de chrome et non par `:root`, pour ne pas se mêler aux variables `--couleur-*` de la charte, qui habillent le document. Dans l'aperçu du composeur, la barre se réduit à « Mode édition » et « Annuler » : c'est « Enregistrer & générer » qui écrit la source *et* les calques. Le HTML autonome conserve son bouton « Enregistrer HTML » — c'est sa seule voie de persistance.
+
 **Les calques survivent aux régénérations.** L'enregistrement les persiste dans `retouches.yaml` (une **source**, versionnée dans Git au même titre que `content.yaml` — pas un artefact), et le moteur de rendu les réinjecte à chaque build. Un calque est ancré à sa **section** (`ancre_section`, l'`id` du `content.yaml`) plutôt qu'à une page : si un changement de charte déplace la section sur une autre feuille, le calque la suit. Les calques posés hors section (en-tête, marge) sont ancrés à l'index de page ; ceux dont l'ancre a disparu sont reversés sur la dernière page plutôt que perdus. Cela tranche partiellement le point ouvert §7 : les **ajouts** remontent bien dans une source durable, mais les **modifications de texte dans le flux** ne sont toujours pas reprises (elles appartiennent à `content.yaml`) — d'où le marqueur `meta.retouche_html_le`, effacé à la génération suivante, qui alimentera l'avertissement de re-synchro de l'Étape 2.
+
+### Composeur : la saisie d'un `content.yaml` à la souris
+
+L'UI de saisie (`app/composer.py` + `app/ui/`, servie sur `/` par
+`python -m app.cli serve`) est la façon normale de produire un `content.yaml` :
+en-tête du document (titre, sous-titre, prérequis), puis empilement de sections
+choisies dans un **panneau de wireframes**. Chaque modèle y est montré en gris
+(l'architecture du bloc, pas son contenu) avec son **poids explicite** (1/4 à
+4/4 de page) et les champs qu'il réclame ; le choix d'un modèle génère
+exactement le formulaire correspondant — trois images légendées pour
+`triple-image`, une image + un texte pour `etape-compacte`, etc.
+
+Ce que le formulaire doit demander pour chaque layout est décrit dans
+`app/catalogue.py` (wireframe SVG, poids, champs `mini`/`maxi`). C'est le
+pendant *saisie* de `app/layouts.py` (le *rendu*) : les deux modules déclarent
+les mêmes layouts, un test vérifie qu'ils ne divergent pas.
+
+Trois garde-fous d'architecture :
+
+1. **L'aperçu est le vrai rendu.** À chaque frappe, le front POSTe l'article
+   complet et le serveur le rend avec `app/renderer.py` : aucune maquette
+   approximative réimplémentée en JS. Il est simplement rendu sans barre
+   d'édition et avec des URL http:// (assets, polices, logo servis sous
+   `/vault`), le build de production gardant ses chemins `file://`.
+2. **L'aperçu n'écrit rien.** Seuls le téléversement d'une image (rangée dans
+   `assets/`) et le bouton « Enregistrer & générer » touchent le disque.
+3. **Le composeur écrit `content.yaml`, jamais le HTML rendu** (§2), puis
+   appelle le même `generate_article` que la CLI — pas de second pipeline.
+   Rouvrir un tutoriel recharge le formulaire depuis `content.yaml` : l'aller-
+   retour est sans perte.
+
+**Enregistrement automatique.** Quitter le champ titre crée le tutoriel sur
+disque ; ensuite, toute modification est écrite dans les 30 secondes. Cet
+enregistrement de fond n'exige pas un tutoriel complet (un brouillon reste
+écrit, les contraintes du template sont renvoyées en avertissements) et ne
+produit pas de PDF — WeasyPrint coûte quelques secondes, il est réservé au
+bouton « Enregistrer & générer ». Ouvrir un tutoriel ne le modifie pas : rien
+n'est réécrit tant que l'utilisateur n'a rien changé.
+
+**Annotations dans l'aperçu.** L'aperçu embarque la surface d'édition (§
+« Surface d'édition ») : barre et palette à droite du volet, calques déjà posés
+réaffichés depuis `retouches.yaml`. « Enregistrer & générer » relève les calques
+de l'aperçu et les écrit dans `retouches.yaml` en même temps que `content.yaml`
+— un seul bouton pour le contenu et les annotations. Entre deux
+enregistrements, les calques posés voyagent avec chaque requête d'aperçu : une
+annotation non enregistrée survit donc au rafraîchissement que déclenche la
+frappe suivante. Ces calques sont ceux du tutoriel *affiché* : tant que le
+nouveau document n'est pas chargé, l'aperçu montre encore le précédent, et le
+composeur s'interdit d'attribuer ses calques au suivant. Changer de tutoriel
+enregistre au passage les annotations en attente. Le zoom s'applique aux pages *dans* le
+document (variable CSS `--apercu-zoom`) et non à l'`<iframe>`, pour que la
+palette garde sa taille native. L'aperçu se fige tant que le mode édition est
+actif : une frappe dans le formulaire ne peut donc pas effacer des calques non
+enregistrés.
 
 ### Sections modulaires : grille de page en 4 hauteurs
 
@@ -63,6 +121,7 @@ Un template n'est plus un document figé avec des sections prédéfinies à l'av
 
 Le moteur de rendu empile les sections dans l'ordre du `content.yaml` et déclenche un **saut de page** dès que la section suivante ferait dépasser 4 unités sur la page courante. Intérêt : un catalogue de blocs réutilisables (« texte pleine page », « image + légende demi-page », « deux encadrés côte à côte »…) plutôt qu'un template monolithique par type d'article — la mise en page devient une composition pilotée par le contenu, pas un gabarit figé par le template.
 
+- **Une section occupe exactement son quota** : hauteur fixe (`height`, pas `min-height`) et débordement rogné. Elle ne s'étire donc jamais pour remplir la place restante d'une page, et ne mord jamais sur le quota de la suivante — les sections se posent bout à bout depuis le haut de la page. Même règle pour l'en-tête du document, qui vaut exactement 1 unité (celle que la pagination lui réserve), son contenu réparti en `space-evenly`.
 - Chaque bloc de section du catalogue est conçu pour une ou plusieurs hauteurs compatibles (ex. un bloc « image + légende » pensé pour 1 ou 2 unités, pas pour 4).
 - Contrainte à valider au rendu : la somme des hauteurs des sections d'une même page ne doit pas dépasser 4 (le moteur gère lui-même le passage à la page suivante, l'utilisateur n'a pas à la calculer).
 
@@ -104,7 +163,9 @@ Template + sections saisies manuellement → HTML + PDF conformes à la charte, 
 - Moteur de rendu HTML/CSS : boucle sections → blocs, gestion Markdown léger → HTML (gras/listes), images (`<figure>`/`<img>`), encadrés (classes sémantiques), **logique de pagination sur la grille 4 hauteurs** (`break-before: page` dès que la somme dépasse 4 sur la page courante). Layouts multi-colonnes en `display:table` (support print robuste dans WeasyPrint, contrairement à flexbox).
 - Conversion PDF via WeasyPrint, vérifier fidélité (polices `@font-face` de `charte/fonts/`, sauts de page).
 - Rangement + `meta.yaml` + `hash_contenu`.
-- UI MVP : saisie, upload images, bouton Générer, aperçu HTML.
+- UI MVP (**fait**) : composeur web — en-tête, panneau de wireframes avec poids,
+  formulaire dérivé du layout choisi, upload d'images, aperçu live, bouton
+  « Enregistrer & générer » (voir « Composeur » ci-dessus).
 - **DoD** : tuto 5 sections + 3 images → HTML éditable propre + PDF fidèle ; template créé par un non-développeur fonctionne ; des sections de hauteurs variées (ex. 1+1+2, ou 4 seule) se composent correctement sur la page sans intervention manuelle.
 
 ### Étape 2 — Synchronisation charte
@@ -159,6 +220,7 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 
 - Liste exacte des types d'encadrés (astuce, attention…) et leur charte visuelle précise.
 - Modèle d'édition navigateur : retouches finales **jetables** (retenu) vs option d'**ajout remonté dans `content.yaml`** (survit aux régénérations) ; catalogue exact des éléments insérables dans l'éditeur `contenteditable`.
+- Composeur : réordonnancement des sections par glisser-déposer (aujourd'hui ↑/↓), et choix du template à la création (aujourd'hui `tuto-release` par défaut).
 - Catalogue exact des blocs de section par hauteur (1/2/3/4 unités) et comportement si une section ne correspond à aucune hauteur compatible dans le template.
 - Spécification de l'API du site maison (endpoints, format, auth) — à caler avec l'équipe web.
 - Fournisseur de génération d'images IA et licences associées.
@@ -166,4 +228,6 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 - Workflow Git à 2 utilisateurs (branches vs commits séquentiels) — probablement non critique vu le volume.
 
 ---
-**Statut** : cadrage validé (2026-07-01). Étape 1 en cours. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.
+**Statut** : cadrage validé (2026-07-01). Étape 1 en cours — **composeur livré (2026-08-19)** :
+saisie assistée du `content.yaml` (wireframes + poids + aperçu live annotable, enregistrement
+automatique), servie par le même `python -m app.cli serve` que l'enregistrement des retouches. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.
