@@ -17,7 +17,8 @@ from pathlib import Path
 from jinja2 import Template
 
 from app.editeur import editeur_html
-from app.layouts import render_section_html
+from app.layouts import STRUCTURE_CSS, render_section_html
+from app.modeles import Geometrie
 from app.pagination import paginate
 from app.schemas import Article, Calque, Charte, Retouches, StyleTypo, TemplateConfig
 
@@ -90,6 +91,7 @@ def _charte_css(charte: Charte, charte_base: str | None = None) -> str:
     p = charte.polices
     marge = charte.espacements.marge_mm
     unit_mm = (A4_HEIGHT_MM - 2 * marge) / 4
+    g = Geometrie.depuis_charte(charte)
 
     root_vars = (
         ":root{"
@@ -101,6 +103,14 @@ def _charte_css(charte: Charte, charte_base: str | None = None) -> str:
         f"--interligne:{charte.espacements.interligne};"
         f"--marge:{marge}mm;"
         f"--unit-height:{unit_mm:.3f}mm;"
+        # Géométrie des sections (app/modeles.py) : les mêmes valeurs servent au
+        # calcul des hauteurs d'images côté Python et au CSS du template.
+        f"--sec-pad-haut:{g.pad_haut_mm}mm;"
+        f"--sec-pad-bas:{g.pad_bas_mm}mm;"
+        f"--titre-h:{g.titre_mm}mm;"
+        f"--legende-h:{g.legende_mm}mm;"
+        f"--gouttiere:{g.gouttiere_mm}mm;"
+        f"--espace-images:{g.espace_images_mm}mm;"
         "}"
     )
 
@@ -115,7 +125,9 @@ def _charte_css(charte: Charte, charte_base: str | None = None) -> str:
         _typo_rules(".prerequis-item", p.prerequis_item, c.texte),
     ])
 
-    return _font_face_css(charte_base) + root_vars + typo
+    # Le CSS structurel du moteur de sections voyage avec la charte : il en
+    # consomme les variables et doit précéder le CSS du template.
+    return _font_face_css(charte_base) + root_vars + typo + STRUCTURE_CSS
 
 
 def _header_html(article: Article, logo_uri: str | None) -> str:
@@ -168,8 +180,7 @@ def _grouper_calques(retouches: Retouches) -> tuple[dict[str, str], dict[int, st
 
 def _pages_html(
     article: Article,
-    config: TemplateConfig,
-    article_dir: Path,
+    geometrie: Geometrie,
     logo_uri: str | None,
     retouches: Retouches,
 ) -> str:
@@ -180,15 +191,12 @@ def _pages_html(
     pages = paginate(article.sections, premiere_page_reservee=1)
     if not pages:
         pages = [[]]  # au moins la page d'en-tête même sans section
-    largeur = config.image.largeur_mm_defaut
     calques_section, calques_page = _grouper_calques(retouches)
     out: list[str] = []
     for page_idx, page_sections in enumerate(pages):
         inner = _header_html(article, logo_uri) if page_idx == 0 else ""
         inner += "".join(
-            render_section_html(
-                s, article_dir, largeur, calques_html=calques_section.pop(s.id, "")
-            )
+            render_section_html(s, geometrie, calques_html=calques_section.pop(s.id, ""))
             for s in page_sections
         )
         inner += calques_page.get(page_idx, "")
@@ -262,7 +270,7 @@ def render_article(
         charte_css=_charte_css(charte, charte_base),
         base_href=base_href or (article_dir.as_uri() + "/"),
         pages_html=_pages_html(
-            article, config, article_dir, logo_uri, retouches or Retouches()
+            article, Geometrie.depuis_charte(charte), logo_uri, retouches or Retouches()
         ),
         editeur_html=_editeur_et_apercu(
             article_dir.name, avec_editeur, editeur_api_url, apercu

@@ -1,0 +1,86 @@
+id: 2026-09-reinitialiser-son-mot-de-passe-par-mail
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: Réinitialiser son mot de passe par mail
+resume: null
+auteur: Baptiste Lemonnier
+sections:
+- id: sec-1
+  titre: 1 - Se connecter à la plateforme
+  layout: etape-compacte
+  blocs:
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07.png
+  - type: paragraphe
+    texte: |-
+      Rendez-vous sur https://app.syope.fr
+      - Renseignez votre nom d'utilisateur ou votre adresse e-mail,
+       - Indiquez le mot de passe que vous avez défini pour votre compte
+      - Cliquez sur "Connexion". Vous serez automatiquement dirigés vers la plateforme Syopé
+- id: sec-2
+  titre: 1 - Ouvrir le menu de test
+  layout: texte-seul
+  blocs:
+  - type: paragraphe
+    texte: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummy text ever since 1966, when
+      designers at Letraset and James Mosley, the librarian at St Bride Printing Library
+      in London, took a 1914 Cicero translation and scrambled it to make dummy text
+      for Letraset's
+- id: sec-3
+  titre: 1 - C'est une section de test
+  layout: etape-compacte
+  blocs:
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07-2.png
+  - type: paragraphe
+    texte: |-
+      Rendez-vous sur https://app.syope.fr
+      - Renseignez votre nom d'utilisateur ou votre adresse e-mail,
+       - Indiquez le mot de passe que vous avez défini pour votre compte
+      - Cliquez sur "Connexion". Vous serez automatiquement dirigés vers la plateforme Syopé
+- id: sec-5
+  titre: 1 - L'identité de mon identité
+  layout: triple-image
+  blocs:
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07-3.png
+    legende: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummy
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07-4.png
+    legende: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummy
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07-5.png
+    legende: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummy
+- id: sec-6
+  layout: texte-seul
+  blocs:
+  - type: paragraphe
+    texte: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummyLorem Ipsum is simply dummy
+      text of the printing and typesetting industry. Lorem Ipsum has been the industry's
+      standard dummy
+- id: sec-7
+  titre: titre
+  layout: etape-compacte
+  blocs:
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07-6.png
+  - type: paragraphe
+    texte: Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+      Lorem Ipsum has been the industry's standard dummyLorem Ipsum is simply dummy
+      text of the printing and typesetting industry. Lorem Ipsum has been the industry's
+      standard dummy
+prerequis:
+- Être connecté à votre compte Syopé sur la plateforme
+- Être connecté à internet via un navigateur Google Chrome ou Mozzila Firefox
+metadonnees_seo:
+  slug: null
+  meta_title: null
+  meta_description: null
+  mots_cles: []
+liens_internes: []

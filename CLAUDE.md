@@ -41,7 +41,7 @@ Dimensionnement volontairement léger (2 utilisateurs, quelques centaines d'arti
 
 ### Template HTML : design-system CSS + variables de charte, jamais de couleur en dur
 
-Le template est un fichier `template.html` (Jinja2 : `{{ article.titre }}`, `{% for … %}`) qui porte le **design-system** (layout des blocs de section) en CSS. Il utilise exclusivement des **classes de style nommées** (`titre-1`, `corps`, `legende`…) et des **variables CSS** (`var(--couleur-primaire)`, `var(--couleur-lisere)`…) — jamais de valeur codée en dur. Au build, la charte est injectée sous forme d'un bloc `:root { --couleur-… }` + `@font-face` + règles typographiques des styles nommés. Une seule famille de templates, la charte varie par injection — pas un template par charte. Les couleurs **sémantiques** des encadrés (astuce/attention/info) restent fixes dans le template : elles portent un sens indépendant de la marque.
+Le template est un fichier `template.html` (Jinja2 : `{{ article.titre }}`, `{% for … %}`) qui porte le **style** du document en CSS (page, en-tête, couleurs des encadrés). La **structure** des sections (hauteurs, grilles, remplissage des images) n'y figure plus : elle dépend de la géométrie calculée par le moteur et voyage avec lui (`STRUCTURE_CSS`, `app/layouts.py`), injectée au build avant le CSS du template — qui reste libre de la surcharger. Il utilise exclusivement des **classes de style nommées** (`titre-1`, `corps`, `legende`…) et des **variables CSS** (`var(--couleur-primaire)`, `var(--couleur-lisere)`…) — jamais de valeur codée en dur. Au build, la charte est injectée sous forme d'un bloc `:root { --couleur-… }` + `@font-face` + règles typographiques des styles nommés. Une seule famille de templates, la charte varie par injection — pas un template par charte. Les couleurs **sémantiques** des encadrés (astuce/attention/info) restent fixes dans le template : elles portent un sens indépendant de la marque.
 
 ### Surface d'édition : retouches finales dans le navigateur
 
@@ -66,24 +66,27 @@ Le chrome de l'éditeur (barre, palette, poignées) reprend les jetons visuels d
 L'UI de saisie (`app/composer.py` + `app/ui/`, servie sur `/` par
 `python -m app.cli serve`) est la façon normale de produire un `content.yaml` :
 en-tête du document (titre, sous-titre, prérequis), puis empilement de sections
-choisies dans un **panneau de wireframes**. Chaque modèle y est montré en gris
-(l'architecture du bloc, pas son contenu) avec son **poids explicite** (1/4 à
-4/4 de page) et les champs qu'il réclame ; le choix d'un modèle génère
-exactement le formulaire correspondant — trois images légendées pour
-`triple-image`, une image + un texte pour `etape-compacte`, etc.
+choisies dans un **panneau de wireframes à quatre onglets, un par poids**
+(¼, ½, ¾ de page, page entière), où les modèles sont regroupés par famille
+(texte, une image + texte, plusieurs images + texte, images seules). Chaque
+modèle y est dessiné en gris *à l'échelle de la section produite* ; le choix
+génère exactement le formulaire correspondant — trois images légendées pour
+`triple-image`, une image + une liste d'éléments à icône pour `image-items`…
+Le poids d'une section se change ensuite sans la recréer, parmi ceux où son
+modèle existe. Chaque image a un réglage **padding** ; chaque zone de texte une
+petite barre (gras, lien, listes) qui écrit le Markdown léger.
 
-Ce que le formulaire doit demander pour chaque layout est décrit dans
-`app/catalogue.py` (wireframe SVG, poids, champs `mini`/`maxi`). C'est le
-pendant *saisie* de `app/layouts.py` (le *rendu*) : les deux modules déclarent
-les mêmes layouts, un test vérifie qu'ils ne divergent pas.
+Formulaires et wireframes sont **dérivés** du registre des modèles
+(`app/modeles.py`, voir « Sections modulaires ») par `app/catalogue.py` : rien
+n'est déclaré deux fois, rendu et saisie ne peuvent pas diverger.
 
 Trois garde-fous d'architecture :
 
 1. **L'aperçu est le vrai rendu.** À chaque frappe, le front POSTe l'article
    complet et le serveur le rend avec `app/renderer.py` : aucune maquette
-   approximative réimplémentée en JS. Il est simplement rendu sans barre
-   d'édition et avec des URL http:// (assets, polices, logo servis sous
-   `/vault`), le build de production gardant ses chemins `file://`.
+   approximative réimplémentée en JS. Il est simplement rendu avec des URL
+   http:// (assets, polices, logo servis sous `/vault`), le build de
+   production gardant ses chemins `file://`.
 2. **L'aperçu n'écrit rien.** Seuls le téléversement d'une image (rangée dans
    `assets/`) et le bouton « Enregistrer & générer » touchent le disque.
 3. **Le composeur écrit `content.yaml`, jamais le HTML rendu** (§2), puis
@@ -125,12 +128,22 @@ Le moteur de rendu empile les sections dans l'ordre du `content.yaml` et déclen
 - Chaque bloc de section du catalogue est conçu pour une ou plusieurs hauteurs compatibles (ex. un bloc « image + légende » pensé pour 1 ou 2 unités, pas pour 4).
 - Contrainte à valider au rendu : la somme des hauteurs des sections d'une même page ne doit pas dépasser 4 (le moteur gère lui-même le passage à la page suivante, l'utilisateur n'a pas à la calculer).
 
+**Registre des modèles (`app/modeles.py`).** Un modèle décrit l'architecture d'une section de façon déclarative : grille d'images (colonnes × lignes), position du texte (seul, à droite, à gauche, dessous, dessus, entre deux images, aucun), style du texte (simple, liseré, cadres, liste d'éléments à icône, deux colonnes), part de largeur des images, légendes, poids compatibles. Un **seul moteur** (`app/layouts.py`) rend tous les modèles ; ajouter un modèle = une entrée dans le registre, sans code de rendu. 33 modèles, soit 113 variantes modèle × poids ; les 8 historiques gardent leur identifiant et leur poids par défaut, les `content.yaml` existants se rendent à l'identique.
+
+**Géométrie en mm, calculée en Python.** Les hauteurs (corps de section, boîtes image, réserves de titre, de légende, d'encart) sont dérivées de la charte (marges, tailles de police) par `Geometrie`, et posées explicitement sur chaque boîte : un `calc()` CSS imbriqué ne se comporte pas de la même façon dans le navigateur et dans WeasyPrint. Les mêmes valeurs sont exposées au CSS en variables (`--sec-pad-bas`, `--titre-h`, `--gouttiere`…).
+
+- **Une image n'est jamais déformée** : elle remplit sa boîte en largeur ou en hauteur (`object-fit: contain`), ancrée en bas quand elle est légendée pour que la légende la touche. Le réglage **`padding_mm`** agrandit la marge intérieure de la boîte : l'image rétrécit, la mise en page ne bouge pas.
+- **Marge de sécurité** : chaque section garde un padding bas (5 mm) qui reste vide même si le contenu déborde — le rognage se fait sur un conteneur interne (`.sec-contenu`), avant ce padding. Les calques, eux, sont enfants directs de la section : ils peuvent déborder sur la voisine (une flèche qui traverse deux sections).
+- **Gouttières** : entre images et entre colonnes, des cellules d'espacement explicites (plus fiables que `border-spacing` dans WeasyPrint).
+- **Encarts partout** : tout modèle accepte des encarts optionnels (astuce ✓ vert, attention ! rouge, info i bleu — pictogrammes en police, donc fidèles au PDF). Ils suivent le texte quand la section a une colonne de texte, sinon ils se placent sous les images en prenant sur leur hauteur.
+- Un content.yaml qui fournit plus d'images que d'emplacements n'en perd aucune : elles ajoutent des lignes à la grille.
+
 ## 4. Modèle de données (colonne vertébrale)
 
 Tout le monde (utilisateur, moteur de rendu, IA, publication) parle le même schéma. À figer avant de coder quoi que ce soit.
 
-- **`content.yaml`** (par article) — source de vérité : métadonnées + `sections[]`, chaque section déclarant une **`hauteur`** (1 à 4 unités, voir [Sections modulaires](#sections-modulaires--grille-de-page-en-4-hauteurs)) et une **liste ordonnée de `blocs`** (`paragraphe`, `encadre` (astuce/attention/info), `image`) plutôt qu'un simple titre+texte. Contient aussi `metadonnees_seo` et `liens_internes`, vides tant que les étapes 5-6 ne sont pas actives (évite une migration de schéma plus tard).
-- **`config.yaml`** (par template) — ce que le template attend : catalogue des blocs de section disponibles et leurs hauteurs compatibles (1-4), sections min/max, contraintes de longueur, formats d'image acceptés.
+- **`content.yaml`** (par article) — source de vérité : métadonnées + `sections[]`, chaque section déclarant un **`layout`** (le modèle, voir [Sections modulaires](#sections-modulaires--grille-de-page-en-4-hauteurs)), une **`hauteur`** (1 à 4 unités, facultative : poids par défaut du modèle ; doit être compatible avec lui) et une **liste ordonnée de `blocs`** (`paragraphe`, `encadre` (astuce/attention/info), `image` (légende, `padding_mm`), `item` (texte + icône facultative, pour les listes légendées)) plutôt qu'un simple titre+texte. Le texte est du Markdown léger : **gras**, listes à puces et numérotées, liens `[texte](https://…)` — **http/https uniquement**, tout autre schéma reste du texte. Contient aussi `metadonnees_seo` et `liens_internes`, vides tant que les étapes 5-6 ne sont pas actives (évite une migration de schéma plus tard).
+- **`config.yaml`** (par template) — ce que le template attend : sections min/max, contraintes de longueur, formats d'image acceptés. Son `catalogue_blocs` est descriptif ; le catalogue qui fait foi est le registre `app/modeles.py`.
 - **`charte.yaml`** — couleurs (dont `lisere`), polices, logo, espacements. Injectée en variables CSS au build. Versionné (`version`, archives dans `charte/versions/`).
 - **`meta.yaml`** (par article) — `template_id`/version, `charte_version` (clé de la synchro), `hash_contenu`, `statut` (brouillon/validé/publié), `url_publiee`, dates.
 
@@ -208,7 +221,7 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 
 ## 6. Risques principaux (voir aussi journal des décisions)
 
-- **Fidélité PDF** : polices manquantes ou support CSS partiel → polices de la charte embarquées en `@font-face` (dossier `charte/fonts/`), moteur figé (WeasyPrint). Attention : WeasyPrint a un support **flexbox/grid partiel** → privilégier `display:table`/`table-cell` pour les mises en page multi-colonnes et le centrage vertical. Si un cas CSS moderne bloque, échappatoire = Chrome headless (Playwright).
+- **Fidélité PDF** : polices manquantes ou support CSS partiel → polices de la charte embarquées en `@font-face` (dossier `charte/fonts/`), moteur figé (WeasyPrint). Attention : WeasyPrint a un support **flexbox/grid partiel** → privilégier `display:table`/`table-cell` pour les mises en page multi-colonnes et le centrage vertical. Si un cas CSS moderne bloque, échappatoire = Chrome headless (Playwright). Autre piège vérifié : dans WeasyPrint, `overflow: hidden` **ne rogne pas** un contenu qui déborde en bas de page — il déclenche un saut de page (une légende de trois lignes partait seule sur une nouvelle feuille). D'où `continue: discard` sur les sections, `max-lines` sur les légendes et des pages à hauteur fixe à l'impression ; un test rend tous les modèles dans tous leurs poids et vérifie que le PDF compte exactement les pages prévues.
 - **Licences de polices et d'images** : usage serveur automatisé ≠ usage bureautique classique — à vérifier explicitement.
 - **Retouches manuelles écrasées** par une re-synchro — politique claire + détection de modification.
 - **Exactitude des tutos générés par IA** — relecture par un référent produit obligatoire avant publication.
@@ -221,7 +234,7 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 - Liste exacte des types d'encadrés (astuce, attention…) et leur charte visuelle précise.
 - Modèle d'édition navigateur : retouches finales **jetables** (retenu) vs option d'**ajout remonté dans `content.yaml`** (survit aux régénérations) ; catalogue exact des éléments insérables dans l'éditeur `contenteditable`.
 - Composeur : réordonnancement des sections par glisser-déposer (aujourd'hui ↑/↓), et choix du template à la création (aujourd'hui `tuto-release` par défaut).
-- Catalogue exact des blocs de section par hauteur (1/2/3/4 unités) et comportement si une section ne correspond à aucune hauteur compatible dans le template.
+- Catalogue des modèles : le registre est global (tous les templates voient les 33 modèles). À trancher si un template doit en restreindre la liste — `config.yaml` porterait alors les identifiants autorisés.
 - Spécification de l'API du site maison (endpoints, format, auth) — à caler avec l'équipe web.
 - Fournisseur de génération d'images IA et licences associées.
 - Ahrefs seul vs Ahrefs + SEMrush.
@@ -230,4 +243,7 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 ---
 **Statut** : cadrage validé (2026-07-01). Étape 1 en cours — **composeur livré (2026-08-19)** :
 saisie assistée du `content.yaml` (wireframes + poids + aperçu live annotable, enregistrement
-automatique), servie par le même `python -m app.cli serve` que l'enregistrement des retouches. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.
+automatique), servie par le même `python -m app.cli serve` que l'enregistrement des retouches.
+**Catalogue de modèles (2026-09-23)** : registre déclaratif de 33 modèles × 4 poids, moteur de rendu
+unique à géométrie en mm, images sans déformation avec padding, encarts dans tous les modèles,
+liens et listes numérotées dans le texte. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.

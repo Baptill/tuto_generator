@@ -13,12 +13,24 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import storage
-from app.catalogue import CATALOGUE, CATALOGUE_PAR_ID
-from app.layouts import LAYOUTS
-from app.schemas import LAYOUT_HAUTEURS
+from app.catalogue import catalogue_json, champs_de
+from app.modeles import MODELES, MODELES_PAR_ID, Geometrie
 from app.serveur import app
 
 ARTICLE_EXEMPLE = "2026-07-exemple-tuto"
+
+# Poids historiques : les content.yaml écrits avant l'introduction de
+# `hauteur` doivent garder exactement la même mise en page.
+POIDS_HISTORIQUES = {
+    "texte-seul": 1,
+    "etape-compacte": 1,
+    "image-gauche-texte": 2,
+    "texte-image-droite": 2,
+    "image-dessus-texte": 2,
+    "triple-image": 2,
+    "etape-detaillee": 3,
+    "pleine-page": 4,
+}
 
 
 @pytest.fixture
@@ -26,21 +38,34 @@ def client():
     return TestClient(app)
 
 
-def test_catalogue_couvre_exactement_les_layouts_rendus():
-    assert set(CATALOGUE_PAR_ID) == set(LAYOUTS) == set(LAYOUT_HAUTEURS)
-    for entree in CATALOGUE:
-        assert entree.hauteur == LAYOUT_HAUTEURS[entree.id]
+def test_modeles_historiques_gardent_leur_poids():
+    for layout_id, poids in POIDS_HISTORIQUES.items():
+        assert MODELES_PAR_ID[layout_id].defaut == poids, layout_id
 
 
-def test_catalogue_champs_coherents_avec_le_rendu():
-    """Les layouts qui n'affichent qu'une image ne doivent pas en demander
-    plusieurs — et `triple-image` doit bien en demander trois."""
-    for entree in CATALOGUE:
-        assert entree.champs, f"{entree.id} : aucun champ à saisir"
-        for champ in entree.champs:
-            assert champ.type in {"image", "paragraphe", "encadre"}
-            assert 0 <= champ.mini <= champ.maxi
-    triple = CATALOGUE_PAR_ID["triple-image"].champs[0]
+def test_chaque_modele_est_coherent():
+    for m in MODELES:
+        assert m.defaut in m.hauteurs, m.id
+        assert set(m.hauteurs) <= {1, 2, 3, 4}, m.id
+        assert 0 < m.ratio < 1, m.id
+
+
+def test_champs_derives_du_modele():
+    """Le formulaire demande exactement les emplacements du modèle, et tous
+    les modèles proposent des encarts en option."""
+    for m in MODELES:
+        champs = champs_de(m)
+        types = [c.type for c in champs]
+        assert "encadre" in types, f"{m.id} : pas d'encart proposé"
+        images = [c for c in champs if c.type == "image"]
+        if m.a_images:
+            assert images[0].mini == m.emplacements, m.id
+            assert images[0].padding, m.id
+        else:
+            assert not images, m.id
+        if m.texte == "aucun":
+            assert "paragraphe" not in types and "item" not in types, m.id
+    triple = champs_de(MODELES_PAR_ID["triple-image"])[0]
     assert (triple.type, triple.mini, triple.maxi, triple.legende) == ("image", 3, 3, True)
 
 
@@ -49,8 +74,22 @@ def test_endpoint_catalogue(client):
     assert rep.status_code == 200
     corps = rep.json()
     assert corps["template"]["sections_min"] == 2
-    assert {l["id"] for l in corps["layouts"]} == set(LAYOUTS)
-    assert all("<svg" in l["wireframe"] for l in corps["layouts"])
+    assert {m["id"] for m in corps["modeles"]} == set(MODELES_PAR_ID)
+    assert {f["id"] for f in corps["familles"]} >= {m.famille for m in MODELES}
+    for poids in "1234":
+        assert sum(poids in m["wireframes"] for m in corps["modeles"]) >= 15, poids
+    for m in corps["modeles"]:
+        assert set(m["wireframes"]) == {str(h) for h in m["hauteurs"]}
+        assert all("<svg" in svg for svg in m["wireframes"].values())
+
+
+def test_wireframe_a_lechelle_de_la_section():
+    """Le wireframe est dessiné en mm : son rapport hauteur/largeur est celui
+    de la section rendue."""
+    g = Geometrie.depuis_charte(storage.load_charte())
+    cat = catalogue_json(g)
+    svg = next(m for m in cat["modeles"] if m["id"] == "grille-2x2")["wireframes"]["4"]
+    assert f'viewBox="0 0 {g.largeur_mm:.1f} {g.section_mm(4):.1f}"' in svg
 
 
 def test_apercu_rend_sans_rien_ecrire(client):
@@ -323,7 +362,7 @@ def test_apercu_prend_les_calques_de_la_charge(client):
 
 def test_enregistrer_persiste_les_calques_de_lapercu(client):
     """« Enregistrer & générer » écrit la source *et* les annotations."""
-    article, _ = storage.load_article(ARTICLE_EXEMPLE)
+    article, contenu_avant = storage.load_article(ARTICLE_EXEMPLE)
     avant = storage.retouches_path(ARTICLE_EXEMPLE).read_bytes()
     calque = {
         "ancre_section": "sec-2",
@@ -348,7 +387,59 @@ def test_enregistrer_persiste_les_calques_de_lapercu(client):
             storage.article_output_dir(ARTICLE_EXEMPLE) / "article.html"
         ).read_text()
     finally:
+        # L'enregistrement réécrit content.yaml : on rend l'exemple tel quel.
+        storage.content_path(ARTICLE_EXEMPLE).write_bytes(contenu_avant)
         storage.retouches_path(ARTICLE_EXEMPLE).write_bytes(avant)
         from app.build import generate_article
 
         generate_article(ARTICLE_EXEMPLE, skip_pdf=True)
+
+
+def test_aller_retour_des_nouveaux_champs(client):
+    """Poids, padding d'image, éléments de liste à icône et liens survivent à
+    l'enregistrement dans content.yaml."""
+    article_id = "test-composeur-modeles"
+    assets = storage.article_assets_dir(article_id)
+    assets.mkdir(parents=True, exist_ok=True)
+    for nom in ("img1.png", "img4.png"):
+        shutil.copy(storage.article_assets_dir(ARTICLE_EXEMPLE) / nom, assets / nom)
+    charge = {
+        "type": "tutoriel", "template_id": "tuto-release", "titre": "Modèles", "auteur": "Test",
+        "sections": [
+            {"id": "sec-1", "layout": "image-items", "hauteur": 3, "blocs": [
+                {"type": "image", "fichier": "assets/img1.png", "padding_mm": 8},
+                {"type": "item", "texte": "Dictée vocale", "icone": "assets/img4.png"},
+                {"type": "item", "texte": "Voir [l'aide](https://app.syope.fr/aide)"},
+                {"type": "encadre", "style": "astuce", "texte": "La licence est activée."},
+            ]},
+            {"id": "sec-2", "layout": "encart-seul", "blocs": [
+                {"type": "encadre", "style": "info", "texte": "Fin."},
+            ]},
+        ],
+    }
+    try:
+        rep = client.post(f"/api/articles/{article_id}/enregistrer", json={"article": charge})
+        assert rep.json()["ok"], rep.json()
+        relu, brut = storage.load_article(article_id)
+        s1 = relu.sections[0]
+        assert (s1.layout, s1.hauteur) == ("image-items", 3)
+        assert s1.blocs[0].padding_mm == 8
+        assert s1.blocs[1].icone == "assets/img4.png"
+        assert relu.sections[1].hauteur == 1  # poids par défaut du modèle
+        html = storage.article_output_dir(article_id).joinpath("article.html").read_text()
+        assert 'href="https://app.syope.fr/aide"' in html
+        assert "padding:8.00mm" in html
+        # Pas de clé vide parasite dans le fichier écrit.
+        assert b"padding_mm: null" not in brut and b"icone: null" not in brut
+    finally:
+        shutil.rmtree(storage.article_dir(article_id), ignore_errors=True)
+
+
+def test_hauteur_incompatible_refusee(client):
+    charge = {
+        "type": "tutoriel", "template_id": "tuto-release", "titre": "X", "auteur": "Test",
+        "sections": [{"id": "s", "layout": "encart-seul", "hauteur": 4, "blocs": []}],
+    }
+    rep = client.post(f"/api/articles/{ARTICLE_EXEMPLE}/apercu", json={"article": charge})
+    assert rep.status_code == 422
+    assert "poids possibles" in " ".join(rep.json()["detail"])

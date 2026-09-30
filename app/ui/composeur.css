@@ -203,7 +203,26 @@ label input, label textarea { margin-top: 4px; }
 .fermer { border: none; background: none; font-size: 22px; line-height: 1; color: var(--gris-4); }
 .aide { color: var(--gris-6); font-size: 13px; margin: 6px 0 16px; }
 
-.grille-layouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+/* Onglets de poids : un onglet par hauteur de section (1 à 4 unités). */
+.onglets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+.onglet {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 12px; text-align: left; border-radius: var(--rayon);
+}
+.onglet .onglet-poids { font-weight: 600; }
+.onglet .onglet-detail { font-size: 12px; color: var(--gris-6); }
+.onglet.actif { border-color: var(--accent); background: rgba(47, 109, 246, 0.07); }
+.onglet.actif .onglet-poids { color: var(--accent); }
+
+.grille-layouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.grille-layouts[data-poids="3"], .grille-layouts[data-poids="4"] {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.grille-layouts .famille {
+  grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--gris-6);
+}
+.grille-layouts .famille:first-child { margin-top: 0; }
 .carte-layout {
   border: 1px solid var(--gris-3);
   border-radius: var(--rayon);
@@ -223,8 +242,8 @@ label input, label textarea { margin-top: 4px; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 116px;
 }
+.carte-layout .desc.champs { color: var(--gris-4); }
 .carte-layout .nom { font-weight: 600; }
 .carte-layout .desc { font-size: 12px; color: var(--gris-6); }
 .carte-layout .poids {
@@ -235,13 +254,14 @@ label input, label textarea { margin-top: 4px; }
 }
 
 /* Wireframes : gris uniquement, on montre l'architecture, pas le contenu. */
-svg.wireframe { width: 100%; height: auto; max-height: 190px; display: block; }
+svg.wireframe { width: 100%; height: auto; display: block; }
 svg.wireframe .wf-titre { fill: #b9c0c8; }
 svg.wireframe .wf-texte { fill: #d5dae0; }
 svg.wireframe .wf-image { fill: #c6ccd3; }
 svg.wireframe .wf-image-icone { fill: #aeb6bf; }
 svg.wireframe .wf-lisere { fill: #9aa3ad; }
-svg.wireframe .wf-encadre { fill: #e2e6ea; stroke: #c6ccd3; stroke-width: 0.7; }
+svg.wireframe .wf-encadre { fill: #eef0f3; stroke: #b9c0c8; stroke-width: 0.6; }
+.carte-entete .mini-wire svg.wireframe { height: 26px; width: 34px; }
 
 /* --------------------------------------------------------------- aperçu */
 .apercu-barre {
@@ -277,3 +297,24 @@ svg.wireframe .wf-encadre { fill: #e2e6ea; stroke: #c6ccd3; stroke-width: 0.7; }
 .avertissements.erreur { border-color: #e3b2ab; background: #fdecea; }
 .avertissements.succes { border-color: #b6ddb9; background: #eef8ef; }
 .avertissements.succes li { word-break: break-all; }
+
+/* ------------------------------------------------------- formulaire section */
+.choix-poids { display: flex; align-items: center; gap: 6px; margin: 10px 0 12px; font-size: 13px; }
+.choix-poids .label { color: var(--gris-6); margin-right: 4px; }
+.choix-poids button { padding: 3px 9px; font-size: 12px; }
+.choix-poids button.actif { border-color: var(--accent); color: var(--accent); background: rgba(47, 109, 246, 0.07); }
+.choix-poids button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.zone-texte { position: relative; }
+.outils-texte { display: flex; gap: 4px; margin: 6px 0 4px; }
+.outils-texte button.outil { padding: 2px 8px; font-size: 12px; line-height: 1.4; color: var(--gris-6); }
+.outils-texte button.gras { font-weight: 700; }
+
+.uploader .corps { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.uploader .corps > input[type="text"], .uploader .corps .zone-texte { width: 100%; }
+.reglage-padding { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; width: 100%; }
+.reglage-padding input[type="range"] { flex: 1; }
+.reglage-padding output { min-width: 42px; text-align: right; color: var(--gris-6); }
+.uploader.item { align-items: flex-start; }
+.uploader.item .vignette { width: 44px; height: 44px; }
+.ligne-icone { display: flex; gap: 10px; align-items: center; }

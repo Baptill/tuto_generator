@@ -72,7 +72,7 @@ def test_generate_sample_article_end_to_end():
         assert cls in document
 
     # Le liseré de l'étape compacte est bien rendu
-    assert '<div class="ec-lisere">' in document
+    assert '<div class="s-lisere-barre">' in document
 
     # Deux feuilles : sec-1(h=1)+sec-2(h=2)=3 sur page 1 (budget 3),
     # sec-3(h=2) → page 2. Chaque page est un <div class="page">.

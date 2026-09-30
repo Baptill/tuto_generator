@@ -1,0 +1,27 @@
+id: 2026-09-ajouter-un-titre
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: Ajouter un titre
+resume: Un sous titre
+auteur: Baptiste Lemonnier
+sections:
+- id: sec-1
+  titre: 1 - Ouvrir la page
+  layout: image-dessus-texte
+  blocs:
+  - type: image
+    fichier: assets/recto.jpg
+  - type: paragraphe
+    texte: Ajouter un paragraphe
+- id: sec-2
+  layout: texte-seul
+  blocs: []
+prerequis:
+- '- Être sympa'
+metadonnees_seo:
+  slug: null
+  meta_title: null
+  meta_description: null
+  mots_cles: []
+liens_internes: []

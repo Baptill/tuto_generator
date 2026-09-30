@@ -9,34 +9,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.modeles import MODELES_PAR_ID, modele
 
 HauteurSection = Literal[1, 2, 3, 4]
-
-# Hauteur intrinsèque de chaque layout — source de vérité du poids d'une section.
-# Un utilisateur n'a jamais à renseigner `hauteur` dans content.yaml : c'est le
-# choix du layout qui la détermine.
-LAYOUT_HAUTEURS: dict[str, int] = {
-    "texte-seul":        1,
-    "etape-compacte":    1,
-    "image-gauche-texte": 2,
-    "texte-image-droite": 2,
-    "image-dessus-texte": 2,
-    "triple-image":      2,
-    "etape-detaillee":   3,
-    "pleine-page":       4,
-}
-
-LayoutSection = Literal[
-    "texte-seul",
-    "etape-compacte",
-    "image-gauche-texte",
-    "texte-image-droite",
-    "image-dessus-texte",
-    "triple-image",
-    "etape-detaillee",
-    "pleine-page",
-]
 
 StyleEncadre = Literal["astuce", "attention", "info"]
 StatutArticle = Literal["brouillon", "valide", "publie"]
@@ -54,24 +31,63 @@ class BlocEncadre(BaseModel):
 
 
 class BlocImage(BaseModel):
+    """Une image. Elle remplit sa boîte sans être déformée (`object-fit:
+    contain`) ; `padding_mm` ajoute une marge intérieure à la boîte, ce qui
+    réduit l'image d'autant sans toucher à la mise en page."""
+
     type: Literal["image"] = "image"
     fichier: str
     legende: str | None = None
     largeur_mm: int | None = None
+    padding_mm: float | None = Field(default=None, ge=0, le=40)
 
 
-Bloc = Annotated[Union[BlocParagraphe, BlocEncadre, BlocImage], Field(discriminator="type")]
+class BlocItem(BaseModel):
+    """Élément d'une liste légendée : une petite icône optionnelle + un texte
+    (ex. « Dictée vocale » avec l'icône du micro)."""
+
+    type: Literal["item"] = "item"
+    texte: str
+    icone: str | None = None
+
+
+Bloc = Annotated[
+    Union[BlocParagraphe, BlocEncadre, BlocImage, BlocItem], Field(discriminator="type")
+]
 
 
 class Section(BaseModel):
+    """Une section = un modèle (`layout`, voir app/modeles.py) + un poids.
+
+    `hauteur` (1 à 4 unités de page) est facultative dans content.yaml : elle
+    prend alors le poids par défaut du modèle. Elle doit figurer parmi les poids
+    compatibles du modèle.
+    """
+
     id: str
     titre: str | None = None
-    layout: LayoutSection = "texte-seul"
+    layout: str = "texte-seul"
+    hauteur: int | None = None
     blocs: list[Bloc]
 
-    @property
-    def hauteur(self) -> int:
-        return LAYOUT_HAUTEURS[self.layout]
+    @field_validator("layout")
+    @classmethod
+    def _layout_connu(cls, v: str) -> str:
+        if v not in MODELES_PAR_ID:
+            raise ValueError(f"modèle de section inconnu : '{v}'")
+        return v
+
+    @model_validator(mode="after")
+    def _hauteur_compatible(self) -> "Section":
+        m = modele(self.layout)
+        if self.hauteur is None:
+            self.hauteur = m.defaut
+        elif self.hauteur not in m.hauteurs:
+            raise ValueError(
+                f"section '{self.id}' : le modèle '{self.layout}' n'existe pas en poids "
+                f"{self.hauteur} (poids possibles : {list(m.hauteurs)})"
+            )
+        return self
 
 
 class MetadonneesSeo(BaseModel):

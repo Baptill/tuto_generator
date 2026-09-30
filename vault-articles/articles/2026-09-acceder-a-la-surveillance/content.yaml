@@ -1,0 +1,16 @@
+id: 2026-09-acceder-a-la-surveillance
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: Accéder a la surveillance
+resume: Pas à pas pour acceder a la surveillance
+auteur: Baptiste Lemonnnier
+sections: []
+prerequis:
+- Être connecté à Syope
+metadonnees_seo:
+  slug: null
+  meta_title: null
+  meta_description: null
+  mots_cles: []
+liens_internes: []

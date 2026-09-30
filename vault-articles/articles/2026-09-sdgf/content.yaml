@@ -1,0 +1,30 @@
+id: 2026-09-sdgf
+type: tutoriel
+template_id: tuto-release
+langue: fr
+titre: sdgf
+resume: dsgfd
+auteur: dfg
+sections:
+- id: sec-1
+  layout: etape-compacte
+  hauteur: 1
+  blocs:
+  - type: image
+    fichier: assets/capture-decran-2026-09-23-a-10-16-07.png
+  - type: paragraphe
+    texte: xdcgsdfgxgfdx
+  - type: encadre
+    style: astuce
+    texte: dfgdf
+- id: sec-2
+  layout: texte-lisere-image
+  hauteur: 1
+  blocs: []
+prerequis: []
+metadonnees_seo:
+  slug: null
+  meta_title: null
+  meta_description: null
+  mots_cles: []
+liens_internes: []

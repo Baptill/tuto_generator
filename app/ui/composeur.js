@@ -8,7 +8,8 @@
 
 const $ = (sel, racine = document) => racine.querySelector(sel);
 
-let CATALOGUE = [];      // layouts du template courant
+let CATALOGUE = [];      // modèles de section (app/modeles.py via /api/catalogue)
+let FAMILLES = [];       // regroupement des modèles dans le panneau
 let TEMPLATE = null;     // contraintes du template courant
 let etat = nouvelEtat();
 let compteurSection = 0;
@@ -46,13 +47,17 @@ function versBlocs(section) {
           // Réglage fin non exposé dans le formulaire : on le reconduit tel
           // quel pour ne pas l'écraser en rouvrant un content.yaml écrit à la main.
           largeur_mm: entree.largeur_mm ?? null,
+          padding_mm: entree.padding_mm ? Number(entree.padding_mm) : null,
         });
       } else if (champ.type === "paragraphe") {
         if (!entree.texte.trim()) return;
         blocs.push({ type: "paragraphe", texte: entree.texte });
+      } else if (champ.type === "item") {
+        if (!entree.texte.trim()) return;
+        blocs.push({ type: "item", texte: entree.texte, icone: entree.icone || null });
       } else if (champ.type === "encadre") {
         if (!entree.texte.trim()) return;
-        blocs.push({ type: "encadre", style: entree.style || "info", texte: entree.texte });
+        blocs.push({ type: "encadre", style: entree.style || "astuce", texte: entree.texte });
       }
     });
   });
@@ -73,6 +78,7 @@ function versArticle() {
       id: s.id,
       titre: s.titre || null,
       layout: s.layout,
+      hauteur: s.hauteur,
       blocs: versBlocs(s),
     })),
     metadonnees_seo: { slug: null, meta_title: null, meta_description: null, mots_cles: [] },
@@ -89,30 +95,46 @@ function groupesVides(layout) {
 }
 
 function entreeVide(champ) {
-  if (champ.type === "image") return { fichier: "", legende: "", largeur_mm: null };
-  if (champ.type === "encadre") return { style: "info", texte: "" };
+  if (champ.type === "image") return { fichier: "", legende: "", largeur_mm: null, padding_mm: null };
+  if (champ.type === "item") return { texte: "", icone: "" };
+  if (champ.type === "encadre") return { style: "astuce", texte: "" };
   return { texte: "" };
 }
 
+function entreeDepuisBloc(bloc) {
+  if (bloc.type === "image")
+    return {
+      fichier: bloc.fichier,
+      legende: bloc.legende || "",
+      largeur_mm: bloc.largeur_mm ?? null,
+      padding_mm: bloc.padding_mm ?? null,
+    };
+  if (bloc.type === "item") return { texte: bloc.texte, icone: bloc.icone || "" };
+  if (bloc.type === "encadre") return { style: bloc.style, texte: bloc.texte };
+  return { texte: bloc.texte };
+}
+
 function depuisBlocs(layout, blocs) {
-  // Répartit les blocs existants dans les groupes du layout, dans l'ordre des
-  // champs déclarés (les blocs d'un content.yaml écrit à la main peuvent être
-  // plus nombreux que prévu : le surplus est absorbé par le dernier groupe
-  // compatible, jamais perdu silencieusement).
+  // Répartit les blocs existants dans les groupes du modèle, dans l'ordre des
+  // champs déclarés. Les blocs d'un content.yaml écrit à la main peuvent être
+  // plus nombreux que prévu : le surplus rejoint le dernier groupe du même
+  // type (au-delà de son maximum) plutôt que d'être perdu au ré-enregistrement.
   const restants = [...blocs];
   const groupes = layout.champs.map((champ) => {
     const pris = [];
     while (pris.length < champ.maxi) {
       const idx = restants.findIndex((b) => b.type === champ.type);
       if (idx === -1) break;
-      const bloc = restants.splice(idx, 1)[0];
-      if (champ.type === "image")
-        pris.push({ fichier: bloc.fichier, legende: bloc.legende || "", largeur_mm: bloc.largeur_mm ?? null });
-      else if (champ.type === "encadre") pris.push({ style: bloc.style, texte: bloc.texte });
-      else pris.push({ texte: bloc.texte });
+      pris.push(entreeDepuisBloc(restants.splice(idx, 1)[0]));
     }
-    while (pris.length < champ.mini) pris.push(entreeVide(champ));
     return pris;
+  });
+  restants.forEach((bloc) => {
+    const i = layout.champs.map((c) => c.type).lastIndexOf(bloc.type);
+    if (i !== -1) groupes[i].push(entreeDepuisBloc(bloc));
+  });
+  layout.champs.forEach((champ, i) => {
+    while (groupes[i].length < champ.mini) groupes[i].push(entreeVide(champ));
   });
   return groupes;
 }
@@ -133,6 +155,7 @@ function chargerArticle(contenu) {
         id: s.id,
         titre: s.titre || "",
         layout: s.layout,
+        hauteur: s.hauteur || (layout ? layout.defaut : 1),
         groupes: layout ? depuisBlocs(layout, s.blocs || []) : [],
         ouverte: false,
       };
@@ -317,54 +340,89 @@ function rendrePrerequis() {
 
 /* -------------------------------------------------------------- catalogue */
 
+const POIDS_LIBELLES = { 1: "¼ de page", 2: "½ page", 3: "¾ de page", 4: "Page entière" };
+let ongletPoids = 2;
+
 function ouvrirCatalogue() {
+  rendreOngletsPoids();
+  rendreGrilleModeles();
+  $("#modale").hidden = false;
+}
+
+function rendreOngletsPoids() {
+  const zone = $("#onglets-poids");
+  zone.innerHTML = "";
+  [1, 2, 3, 4].forEach((h) => {
+    const n = CATALOGUE.filter((m) => m.hauteurs.includes(h)).length;
+    const onglet = document.createElement("button");
+    onglet.className = "onglet" + (h === ongletPoids ? " actif" : "");
+    onglet.setAttribute("role", "tab");
+    onglet.setAttribute("aria-selected", h === ongletPoids ? "true" : "false");
+    onglet.innerHTML =
+      `<span class="onglet-poids">Poids ${h}</span>` +
+      `<span class="onglet-detail">${POIDS_LIBELLES[h]} · ${n} modèles</span>`;
+    onglet.addEventListener("click", () => {
+      ongletPoids = h;
+      rendreOngletsPoids();
+      rendreGrilleModeles();
+    });
+    zone.append(onglet);
+  });
+}
+
+function rendreGrilleModeles() {
   const grille = $("#grille-layouts");
   grille.innerHTML = "";
-  CATALOGUE.forEach((layout) => {
-    const carte = document.createElement("button");
-    carte.className = "carte-layout";
-    carte.innerHTML =
-      `<div class="cadre-wire">${layout.wireframe}</div>` +
-      `<span class="poids">${poidsLisible(layout.hauteur)}</span>` +
-      `<span class="nom">${echapper(layout.libelle)}</span>` +
-      `<span class="desc">${echapper(layout.description)}</span>` +
-      `<span class="desc">${echapper(resumeChamps(layout))}</span>`;
-    carte.addEventListener("click", () => {
-      ajouterSection(layout);
-      fermerCatalogue();
+  grille.dataset.poids = ongletPoids;
+  FAMILLES.forEach((famille) => {
+    const modeles = CATALOGUE.filter(
+      (m) => m.famille === famille.id && m.hauteurs.includes(ongletPoids)
+    );
+    if (!modeles.length) return;
+    const titre = document.createElement("h3");
+    titre.className = "famille";
+    titre.textContent = famille.libelle;
+    grille.append(titre);
+    modeles.forEach((modele) => {
+      const carte = document.createElement("button");
+      carte.className = "carte-layout";
+      carte.innerHTML =
+        `<div class="cadre-wire">${modele.wireframes[ongletPoids]}</div>` +
+        `<span class="nom">${echapper(modele.libelle)}</span>` +
+        `<span class="desc">${echapper(modele.description)}</span>` +
+        `<span class="desc champs">${echapper(resumeChamps(modele))}</span>`;
+      carte.addEventListener("click", () => {
+        ajouterSection(modele, ongletPoids);
+        fermerCatalogue();
+      });
+      grille.append(carte);
     });
-    grille.append(carte);
   });
-  $("#modale").hidden = false;
 }
 
 function fermerCatalogue() {
   $("#modale").hidden = true;
 }
 
-function poidsLisible(hauteur) {
-  const parts = { 1: "¼ de page", 2: "½ page", 3: "¾ de page", 4: "1 page entière" };
-  return `Poids ${hauteur}/4 — ${parts[hauteur]}`;
-}
-
 function resumeChamps(layout) {
+  const noms = { image: "image", paragraphe: "texte", item: "élément", encadre: "encart" };
   return layout.champs
     .map((c) => {
       const nb = c.mini === c.maxi ? `${c.mini}` : `${c.mini}–${c.maxi}`;
-      const nom = { image: "image", paragraphe: "texte", encadre: "encadré" }[c.type];
-      return `${nb} ${nom}${c.maxi > 1 ? "s" : ""}`;
+      return `${nb} ${noms[c.type]}${c.maxi > 1 ? "s" : ""}`;
     })
     .join(" · ");
 }
 
 /* --------------------------------------------------------------- sections */
 
-function ajouterSection(layout) {
+function ajouterSection(layout, hauteur) {
   compteurSection += 1;
   etat.sections.push({
     id: `sec-${compteurSection}`,
     titre: "",
     layout: layout.id,
+    hauteur: layout.hauteurs.includes(hauteur) ? hauteur : layout.defaut,
     groupes: groupesVides(layout),
     ouverte: true,
   });
@@ -386,7 +444,7 @@ function majCompteurPages() {
   let pages = 1;
   let reste = 4 - 1;
   etat.sections.forEach((s) => {
-    const h = layoutDe(s.layout).hauteur;
+    const h = s.hauteur;
     if (reste - h < 0) {
       pages += 1;
       reste = 4;
@@ -404,10 +462,19 @@ function carteSection(section, index) {
 
   const entete = document.createElement("div");
   entete.className = "carte-entete";
+  if (!layout) {
+    // Modèle inconnu du catalogue (content.yaml écrit à la main) : on
+    // l'affiche sans formulaire plutôt que de faire échouer tout le composeur.
+    entete.innerHTML =
+      `<span class="nom">${echapper(section.titre || section.layout)}</span>` +
+      `<span class="poids">modèle inconnu</span>`;
+    carte.append(entete);
+    return carte;
+  }
   entete.innerHTML =
-    `<span class="mini-wire">${layout.wireframe}</span>` +
+    `<span class="mini-wire">${layout.wireframes[section.hauteur] || ""}</span>` +
     `<span class="nom">${echapper(section.titre || layout.libelle)}</span>` +
-    `<span class="poids">${layout.hauteur}/4</span>`;
+    `<span class="poids">${section.hauteur}/4</span>`;
 
   const outils = document.createElement("div");
   outils.className = "carte-outils";
@@ -430,6 +497,7 @@ function carteSection(section, index) {
 
 function bouton(texte, titre, action, classe = "") {
   const b = document.createElement("button");
+  b.type = "button";
   b.textContent = texte;
   b.title = titre;
   if (classe) b.className = classe;
@@ -459,21 +527,36 @@ function corpsSection(section, layout) {
   const corps = document.createElement("div");
   corps.className = "carte-corps";
 
-  if (layout.titre_section) {
-    const label = document.createElement("label");
-    label.textContent = "Titre de la section";
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = section.titre;
-    input.placeholder = "1 - Ouvrir le menu Identité";
-    input.addEventListener("input", () => {
-      section.titre = input.value;
-      $(".nom", corps.parentElement).textContent = section.titre || layout.libelle;
+  // Poids : on peut agrandir ou réduire une section sans la recréer, parmi
+  // les poids où son modèle existe.
+  const poids = document.createElement("div");
+  poids.className = "choix-poids";
+  poids.innerHTML = '<span class="label">Poids</span>';
+  [1, 2, 3, 4].forEach((h) => {
+    const b = bouton(`${h}/4`, POIDS_LIBELLES[h], () => {
+      section.hauteur = h;
+      rendreSections();
       planifierApercu();
-    });
-    label.append(input);
-    corps.append(label);
-  }
+    }, h === section.hauteur ? "actif" : "");
+    b.disabled = !layout.hauteurs.includes(h);
+    if (b.disabled) b.title = "Ce modèle n'existe pas dans ce poids";
+    poids.append(b);
+  });
+  corps.append(poids);
+
+  const label = document.createElement("label");
+  label.textContent = "Titre de la section";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = section.titre;
+  input.placeholder = "1 - Ouvrir le menu Identité";
+  input.addEventListener("input", () => {
+    section.titre = input.value;
+    $(".nom", corps.parentElement).textContent = section.titre || layout.libelle;
+    planifierApercu();
+  });
+  label.append(input);
+  corps.append(label);
 
   layout.champs.forEach((champ, i) => corps.append(groupeChamp(section, champ, i)));
   return corps;
@@ -487,7 +570,8 @@ function groupeChamp(section, champ, i) {
   const titre = document.createElement("div");
   titre.className = "titre-groupe";
   const nb = champ.maxi > 1 ? ` (${entrees.length}/${champ.maxi})` : "";
-  titre.innerHTML = `<span>${echapper(champ.libelle)}${nb}</span>`;
+  const facultatif = champ.mini === 0 ? " — facultatif" : "";
+  titre.innerHTML = `<span>${echapper(champ.libelle)}${nb}${facultatif}</span>`;
   if (entrees.length < champ.maxi) {
     titre.append(
       bouton("+ Ajouter", `Ajouter : ${champ.libelle}`, () => {
@@ -501,7 +585,9 @@ function groupeChamp(section, champ, i) {
   entrees.forEach((entree, j) => {
     const bloc = document.createElement("div");
     bloc.className = "entree";
-    bloc.append(champ.type === "image" ? champImage(section, champ, entree) : champTexte(champ, entree));
+    if (champ.type === "image") bloc.append(champImage(champ, entree));
+    else if (champ.type === "item") bloc.append(champItem(entree));
+    else bloc.append(champTexte(champ, entree));
     if (entrees.length > champ.mini) {
       bloc.append(
         bouton("×", "Retirer", () => {
@@ -516,14 +602,54 @@ function groupeChamp(section, champ, i) {
   return groupe;
 }
 
+/** Zone de texte + barre d'outils (gras, lien). Le texte reste du Markdown
+ *  léger : c'est ce qu'écrit content.yaml et ce que lit le moteur. */
+function zoneTexte(valeur, placeholder, surSaisie) {
+  const enveloppe = document.createElement("div");
+  enveloppe.className = "zone-texte";
+  const zone = document.createElement("textarea");
+  zone.value = valeur;
+  zone.placeholder = placeholder;
+  zone.addEventListener("input", () => surSaisie(zone.value));
+
+  const outils = document.createElement("div");
+  outils.className = "outils-texte";
+  const entourer = (avant, apres) => {
+    const { selectionStart: a, selectionEnd: b, value: v } = zone;
+    zone.value = v.slice(0, a) + avant + v.slice(a, b) + apres + v.slice(b);
+    zone.focus();
+    zone.setSelectionRange(a + avant.length, b + avant.length);
+    surSaisie(zone.value);
+  };
+  outils.append(
+    bouton("G", "Gras : **texte**", () => entourer("**", "**"), "outil gras"),
+    bouton("🔗 Lien", "Lien internet : [texte](https://…)", () => {
+      const url = window.prompt("Adresse du lien (http:// ou https://)", "https://");
+      if (url === null) return;
+      if (!/^https?:\/\/\S+$/.test(url.trim())) {
+        afficherAvertissements(["Seuls les liens internet (http:// ou https://) sont acceptés."], "erreur");
+        return;
+      }
+      const { selectionStart: a, selectionEnd: b, value: v } = zone;
+      const libelle = v.slice(a, b) || url.trim();
+      zone.value = v.slice(0, a) + `[${libelle}](${url.trim()})` + v.slice(b);
+      zone.focus();
+      surSaisie(zone.value);
+    }, "outil"),
+    bouton("1.", "Liste numérotée : « 1. » en début de ligne", () => entourer("\n1. ", ""), "outil"),
+    bouton("•", "Liste à puces : « - » en début de ligne", () => entourer("\n- ", ""), "outil")
+  );
+  enveloppe.append(outils, zone);
+  return enveloppe;
+}
+
 function champTexte(champ, entree) {
   const enveloppe = document.createElement("div");
 
   if (champ.type === "encadre") {
     const choix = document.createElement("select");
-    [["info", "ℹ️ Info"], ["astuce", "💡 Astuce"], ["attention", "⚠️ Attention"]].forEach(([v, l]) => {
-      const opt = new Option(l, v, false, entree.style === v);
-      choix.append(opt);
+    [["astuce", "✓ Astuce"], ["attention", "! Attention"], ["info", "i Info"]].forEach(([v, l]) => {
+      choix.append(new Option(l, v, false, entree.style === v));
     });
     choix.addEventListener("change", () => {
       entree.style = choix.value;
@@ -532,66 +658,75 @@ function champTexte(champ, entree) {
     enveloppe.append(choix);
   }
 
-  const zone = document.createElement("textarea");
-  zone.value = entree.texte;
-  zone.placeholder =
+  const placeholder =
     champ.type === "encadre"
-      ? "Pensez à enregistrer avant de quitter l'écran."
-      : "Texte du paragraphe. **gras**, listes avec « - » en début de ligne.";
-  zone.addEventListener("input", () => {
-    entree.texte = zone.value;
-    planifierApercu();
-  });
-  enveloppe.append(zone);
+      ? "L'intervention est archivée."
+      : "Texte du paragraphe. **gras**, listes « - » ou « 1. », liens [texte](https://…).";
+  enveloppe.append(
+    zoneTexte(entree.texte, placeholder, (v) => {
+      entree.texte = v;
+      planifierApercu();
+    })
+  );
   return enveloppe;
 }
 
-function champImage(section, champ, entree) {
-  const boite = document.createElement("div");
-  boite.className = "uploader" + (entree.fichier ? " pleine" : "");
+/** Téléverse un fichier dans assets/ et renvoie son chemin relatif. */
+async function televerser(fichier) {
+  const donnees = new FormData();
+  donnees.append("fichier", fichier);
+  const res = await api(
+    `/api/articles/${etat.id}/assets?template_id=${encodeURIComponent(etat.template_id)}`,
+    { method: "POST", body: donnees }
+  );
+  return res.fichier;
+}
 
+/** Vignette + bouton de choix de fichier, partagés par images et icônes. */
+function selecteurFichier(cheminActuel, surChoix, libelle = "Choisir une image…") {
+  const enveloppe = document.createElement("div");
+  enveloppe.className = "selecteur";
   const vignette = document.createElement("div");
   vignette.className = "vignette";
-  if (entree.fichier) {
+  if (cheminActuel) {
     const img = document.createElement("img");
-    img.src = `/vault/articles/${etat.id}/${entree.fichier}`;
+    img.src = `/vault/articles/${etat.id}/${cheminActuel}`;
     vignette.append(img);
   } else {
     vignette.textContent = "aucune";
   }
-
-  const corps = document.createElement("div");
-  corps.className = "corps";
-
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "image/*";
-
-  const choisir = bouton(entree.fichier ? "Remplacer…" : "Choisir une image…", "Téléverser", () => input.click());
+  const choisir = bouton(cheminActuel ? "Remplacer…" : libelle, "Téléverser", () => input.click());
   const nom = document.createElement("div");
   nom.className = "nom-fichier";
-  nom.textContent = entree.fichier || "";
-
+  nom.textContent = cheminActuel || "";
   input.addEventListener("change", async () => {
     const fichier = input.files[0];
     if (!fichier) return;
     nom.textContent = "envoi…";
-    const donnees = new FormData();
-    donnees.append("fichier", fichier);
     try {
-      const res = await api(
-        `/api/articles/${etat.id}/assets?template_id=${encodeURIComponent(etat.template_id)}`,
-        { method: "POST", body: donnees }
-      );
-      entree.fichier = res.fichier;
-      rendreSections();
-      planifierApercu();
+      surChoix(await televerser(fichier));
     } catch (err) {
       nom.textContent = "";
       afficherAvertissements([String(err.message)], "erreur");
     }
   });
+  return { vignette, choisir, nom, input };
+}
 
+function champImage(champ, entree) {
+  const boite = document.createElement("div");
+  boite.className = "uploader" + (entree.fichier ? " pleine" : "");
+  const { vignette, choisir, nom, input } = selecteurFichier(entree.fichier, (chemin) => {
+    entree.fichier = chemin;
+    rendreSections();
+    planifierApercu();
+  });
+
+  const corps = document.createElement("div");
+  corps.className = "corps";
   corps.append(choisir, nom);
 
   if (champ.legende) {
@@ -606,15 +741,66 @@ function champImage(section, champ, entree) {
     corps.append(legende);
   }
 
+  if (champ.padding) {
+    // Padding : marge intérieure de la boîte image. L'image, qui remplit sa
+    // boîte sans déformation, rétrécit d'autant — la mise en page ne bouge pas.
+    const ligne = document.createElement("label");
+    ligne.className = "reglage-padding";
+    ligne.innerHTML = "<span>Padding</span>";
+    const curseur = document.createElement("input");
+    curseur.type = "range";
+    curseur.min = "0";
+    curseur.max = "30";
+    curseur.step = "1";
+    curseur.value = entree.padding_mm || 0;
+    const valeur = document.createElement("output");
+    valeur.textContent = `${curseur.value} mm`;
+    curseur.addEventListener("input", () => {
+      entree.padding_mm = Number(curseur.value) || null;
+      valeur.textContent = `${curseur.value} mm`;
+      planifierApercu();
+    });
+    ligne.append(curseur, valeur);
+    corps.append(ligne);
+  }
+
+  boite.append(vignette, corps, input);
+  return boite;
+}
+
+function champItem(entree) {
+  const boite = document.createElement("div");
+  boite.className = "uploader item" + (entree.icone ? " pleine" : "");
+  const { vignette, choisir, input } = selecteurFichier(entree.icone, (chemin) => {
+    entree.icone = chemin;
+    rendreSections();
+    planifierApercu();
+  }, "Icône…");
+  const corps = document.createElement("div");
+  corps.className = "corps";
+  const ligneIcone = document.createElement("div");
+  ligneIcone.className = "ligne-icone";
+  ligneIcone.append(choisir);
+  if (entree.icone) {
+    ligneIcone.append(bouton("Retirer l'icône", "Retirer l'icône", () => {
+      entree.icone = "";
+      rendreSections();
+      planifierApercu();
+    }, "lien"));
+  }
+  corps.append(
+    ligneIcone,
+    zoneTexte(entree.texte, "Dictée vocale", (v) => {
+      entree.texte = v;
+      planifierApercu();
+    })
+  );
   boite.append(vignette, corps, input);
   return boite;
 }
 
 /* --------------------------------------------------- sauvegarde auto */
 
-/** Annotations posées dans l'aperçu, au format `retouches.yaml`.
- *  `null` = aperçu pas encore rendu : on ne touche alors pas aux retouches
- *  existantes (les envoyer vides les effacerait). */
 /** Vrai si l'aperçu du tutoriel courant a été retouché depuis son affichage
  *  (calque posé, déplacé, supprimé). Sert à ne pas perdre une annotation en
  *  changeant de tutoriel : la pose d'un calque, elle, ne passe pas par le
@@ -629,6 +815,9 @@ function apercuRetouche() {
   }
 }
 
+/** Annotations posées dans l'aperçu, au format `retouches.yaml`.
+ *  `null` = aperçu pas encore rendu : on ne touche alors pas aux retouches
+ *  existantes (les envoyer vides les effacerait). */
 function calquesDeLApercu() {
   // L'aperçu affiche-t-il bien le tutoriel courant ? Sinon (changement de
   // tutoriel en cours), ses calques appartiennent au précédent.
@@ -738,7 +927,8 @@ async function enregistrer() {
 
 async function chargerCatalogue(templateId) {
   const res = await api(`/api/catalogue?template_id=${encodeURIComponent(templateId)}`);
-  CATALOGUE = res.layouts;
+  CATALOGUE = res.modeles;
+  FAMILLES = res.familles;
   TEMPLATE = res.template;
 }
 

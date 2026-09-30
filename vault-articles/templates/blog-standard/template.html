@@ -30,18 +30,8 @@
       h1.titre-1 {
         margin: 0 0 6mm;
       }
-      h2.titre-2 {
-        margin: 0 0 6mm;
-      }
-      p.corps,
-      ul.corps {
+      p.corps {
         margin: 0 0 2.5mm;
-      }
-      ul.corps {
-        padding-left: 6mm;
-      }
-      .corps li {
-        margin-bottom: 1mm;
       }
 
       /* En-tête du document : exactement 1 unité, la hauteur réservée par la
@@ -71,30 +61,6 @@
         padding-left: 5mm;
       }
 
-      /* Grille des 4 hauteurs : chaque section occupe **exactement** son quota,
-     ni plus ni moins. `height` (et non `min-height`) garantit deux choses :
-     une section ne s'étire jamais pour occuper la place restante de la page,
-     et elle ne déborde jamais sur le quota de la suivante — les sections se
-     posent donc bout à bout, en haut de page, dans l'ordre du content.yaml.
-     Ce qui dépasserait est rogné (overflow), jamais repoussé.
-     (Layouts multi-colonnes en display:table — support print robuste dans
-     WeasyPrint, contrairement à flexbox.) */
-      .sec {
-        height: var(--unit-height);
-        overflow: hidden;
-        padding: 2mm 0;
-      }
-      .sec.h2 {
-        height: calc(var(--unit-height) * 2);
-      }
-      .sec.h3 {
-        height: calc(var(--unit-height) * 3);
-      }
-      .sec.h4 {
-        height: calc(var(--unit-height) * 4);
-      }
-
-      /* Chaque page rendue est un div .page. À l'impression, une feuille physique. */
       .page {
         background: var(--couleur-fond);
       }
@@ -107,128 +73,30 @@
         }
       }
 
-      /* Images / légendes */
-      figure.image {
-        margin: 0 0 2mm;
-      }
-      figure.image img {
-        max-width: 100%;
-        height: auto;
-        display: block;
-        width: 100%;
-      }
-      figcaption.legende {
-        margin-top: 3.5mm;
-      }
-      /* Plafond de hauteur des images = quota de la section (moins titre/légende),
-     pour qu'une capture portrait ne déborde jamais sur la page suivante. */
-      .sec.h1 figure.image img {
-        max-height: calc(var(--unit-height) - 14mm);
-      }
-      .sec.h2 figure.image img {
-        max-height: calc(var(--unit-height) * 2 - 22mm);
-      }
-      .sec.h3 figure.image img {
-        max-height: calc(var(--unit-height) * 3 - 26mm);
-      }
-      .sec.h4 figure.image img {
-        max-height: calc(var(--unit-height) * 4 - 26mm);
-      }
-
-      /* --- etape-compacte : image | liseré arrondi | texte centré --- */
-      .etape-compacte .ec-row {
-        display: table;
-        width: 100%;
-      }
-      .etape-compacte .ec-image {
-        display: table-cell;
-        width: 48%;
-        vertical-align: middle;
-        padding-right: 8mm;
-      }
-      .etape-compacte .ec-textwrap {
-        display: table-cell;
-        vertical-align: middle;
-      }
-      /* Table interne : sa hauteur suit le TEXTE (pas l'image) → pill à la
-     hauteur du texte. Le liseré est une cellule étroite arrondie. */
-      .etape-compacte .ec-textinner {
-        display: table;
-      }
-      .etape-compacte .ec-lisere {
-        display: table-cell;
-        width: 4px;
-        background: var(--couleur-lisere);
-        border-radius: 999px;
-      }
-      .etape-compacte .ec-text {
-        display: table-cell;
-        vertical-align: middle;
-        padding-left: 5mm;
-      }
-      .etape-compacte .ec-text p.corps:last-child,
-      .etape-compacte .ec-text ul.corps:last-child {
-        margin-bottom: 0;
-      }
-
-      /* --- deux colonnes (image-gauche-texte / texte-image-droite) --- */
-      .deux-colonnes {
-        display: table;
-        width: 100%;
-      }
-      .deux-colonnes .col-image {
-        display: table-cell;
-        width: 45%;
-        vertical-align: middle;
-      }
-      .deux-colonnes .col-texte {
-        display: table-cell;
-        vertical-align: middle;
-      }
-      .image-gauche-texte .col-image {
-        padding-right: 8mm;
-      }
-      .texte-image-droite .col-image {
-        padding-left: 8mm;
-      }
-
-      /* --- triple-image : jusqu'à 3 captures côte à côte --- */
-      .triple-image-row {
-        display: table;
-        width: 100%;
-        border-spacing: 10mm 0;
-      }
-      .triple-image-row .ti-cell {
-        display: table-cell;
-        vertical-align: top;
-      }
-
-      /* --- Encadrés : couleurs sémantiques FIXES (indépendantes de la marque) --- */
-      .encadre {
-        border-left: 4px solid;
-        border-radius: 3px;
-        padding: 3mm 4mm;
-        margin: 0 0 3mm;
-      }
-      .encadre .encadre-texte {
-        margin: 0;
-      }
+      /* Sections : la structure (hauteurs, grilles, images) est injectée par
+         le moteur (app/layouts.py). Ici, le style propre au template. */
       .encadre-astuce {
-        border-color: #2e7d32;
-        background: #eaf5eb;
+        border-color: #a8d5ae;
+        background: #eef8ef;
+      }
+      .encadre-astuce .encadre-icone span {
+        background: #2e9d4f;
       }
       .encadre-attention {
-        border-color: #c62828;
-        background: #fbeaea;
+        border-color: #efb4ab;
+        background: #fdf0ee;
+      }
+      .encadre-attention .encadre-icone span {
+        background: #d64535;
       }
       .encadre-info {
-        border-color: #1565c0;
-        background: #e9f1fb;
+        border-color: #a9c3ef;
+        background: #edf3fd;
+      }
+      .encadre-info .encadre-icone span {
+        background: #1565c0;
       }
 
-      /* --- Aperçu écran : chaque .page s'affiche comme une feuille A4 distincte
-         (fond gris, ombre, espace entre les feuilles, façon traitement de
-         texte). WeasyPrint rend en media « print » et ignore ce bloc. --- */
       @media screen {
         html {
           background: #fff;

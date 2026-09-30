@@ -25,6 +25,7 @@ from pydantic import BaseModel, ValidationError
 from app import storage
 from app.build import generate_article
 from app.catalogue import catalogue_json
+from app.modeles import Geometrie
 from app.editeur import assainir_html
 from app.renderer import render_article
 from app.schemas import Article, Calque, Retouches
@@ -76,8 +77,12 @@ def page_composeur() -> FileResponse:
 
 @router.get("/api/catalogue")
 def catalogue(template_id: str = "tuto-release") -> dict:
-    """Layouts disponibles (wireframe + poids + champs) et contraintes du
-    template, pour construire le panneau « Ajouter une section »."""
+    """Modèles de section (wireframe par poids, champs du formulaire) et
+    contraintes du template, pour le panneau « Ajouter une section ».
+
+    Les wireframes sont dessinés avec la géométrie de la charte courante : ils
+    sont à l'échelle de ce que produira le rendu.
+    """
     _valider_id(template_id)
     try:
         config = storage.load_template_config(template_id)
@@ -92,7 +97,7 @@ def catalogue(template_id: str = "tuto-release") -> dict:
             "sections_max": config.sections_attendues.max,
             "formats_images": config.image.formats_acceptes,
         },
-        "layouts": catalogue_json(),
+        **catalogue_json(Geometrie.depuis_charte(storage.load_charte())),
     }
 
 

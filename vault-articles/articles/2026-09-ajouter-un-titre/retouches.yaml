@@ -1,0 +1,9 @@
+version: 1
+calques:
+- ancre_section: sec-1
+  page: 0
+  classes: calque calque-encadre-astuce
+  style: 'left: 3.05%; top: 16.31%; width: 45%;'
+  texte: true
+  redim: boite
+  html: <div class="encadre encadre-astuce" style="margin:0">C'est une astuce<p class="encadre-texte"></p></div>

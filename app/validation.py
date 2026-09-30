@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.schemas import Article, BlocImage, BlocParagraphe, TemplateConfig
+from app.schemas import Article, BlocImage, BlocItem, BlocParagraphe, TemplateConfig
 
 
 class ContentValidationError(Exception):
@@ -66,17 +66,20 @@ def validate_article(article: Article, config: TemplateConfig, assets_dir: Path 
                         f"({len(bloc.texte)} caractères, max "
                         f"{config.contraintes.section_texte.max_caracteres})."
                     )
-            elif isinstance(bloc, BlocImage):
-                ext = Path(bloc.fichier).suffix.lstrip(".").lower()
+            elif isinstance(bloc, (BlocImage, BlocItem)):
+                fichier = bloc.fichier if isinstance(bloc, BlocImage) else bloc.icone
+                if not fichier:
+                    continue
+                ext = Path(fichier).suffix.lstrip(".").lower()
                 if ext not in formats_ok:
                     report.add(
                         f"Section '{section.id}' : format d'image '.{ext}' non accepté "
                         f"(formats acceptés : {sorted(formats_ok)})."
                     )
-                if assets_dir is not None and not (assets_dir / bloc.fichier).is_file():
+                if assets_dir is not None and not (assets_dir / fichier).is_file():
                     report.add(
                         f"Section '{section.id}' : fichier image introuvable "
-                        f"'{bloc.fichier}' (attendu dans {assets_dir})."
+                        f"'{fichier}' (attendu dans {assets_dir})."
                     )
 
     return report

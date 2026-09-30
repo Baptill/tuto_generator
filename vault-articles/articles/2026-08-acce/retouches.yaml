@@ -8,3 +8,17 @@ calques:
   redim: boite
   html: '<div class="encadre encadre-astuce" style="margin:0"><p class="encadre-texte">Astuce
     : Saisir le texte…</p></div>'
+- ancre_section: null
+  page: 0
+  classes: calque calque-encadre-astuce
+  style: 'left: 6.82%; top: 56.75%; width: 45%;'
+  texte: true
+  redim: boite
+  html: <div class="encadre encadre-astuce" style="margin:0">une asruce<p class="encadre-texte"></p></div>
+- ancre_section: null
+  page: 0
+  classes: calque calque-fleche
+  style: 'left: 32.25%; top: 39.58%; width: 43.76%; transform: translateY(-50%) rotate(10.3deg);'
+  texte: false
+  redim: fleche
+  html: ''
