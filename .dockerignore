@@ -1,0 +1,16 @@
+# Seul le code et les modèles (templates + charte) entrent dans l'image : les
+# tutoriels vivent dans le volume de données, jamais dans l'image.
+.git
+.venv
+.pytest_cache
+**/__pycache__
+**/.DS_Store
+.env
+.comptes.yaml
+data/
+tests/
+scripts/
+vault-articles/articles/
+vault-articles/_index/
+**/output/
+*.md

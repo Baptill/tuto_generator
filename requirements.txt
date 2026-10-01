@@ -1,11 +1,13 @@
-weasyprint>=63
-jinja2>=3.1
-pydantic>=2.6
-pyyaml>=6.0
-typer>=0.12
-Pillow>=10.0
-pytest>=8.0
-fastapi>=0.110
-uvicorn>=0.29
-python-multipart>=0.0.9
-httpx2>=0.1  # requis par starlette.testclient (tests du composeur)
+# Dépendances d'exécution (image Docker de production), versions épinglées :
+# l'image embarque exactement ce qui passe les tests. Pour monter de version,
+# changer ici, relancer `make test`, puis reconstruire l'image.
+# Outils de test : requirements-dev.txt.
+weasyprint==69.0
+jinja2==3.1.6
+pydantic==2.13.4
+pyyaml==6.0.3
+typer==0.26.8
+pillow==12.3.0
+fastapi==0.141.1
+uvicorn==0.52.1
+python-multipart==0.0.32

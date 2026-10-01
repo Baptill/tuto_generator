@@ -67,7 +67,10 @@ def pdf(
 
 
 @app.command()
-def serve(port: int = typer.Option(None, help="Port d'écoute (défaut : 8765).")):
+def serve(
+    port: int = typer.Option(None, help="Port d'écoute (défaut : 8765)."),
+    host: str = typer.Option("127.0.0.1", help="Interface d'écoute (0.0.0.0 en conteneur)."),
+):
     """Lance le service local : composeur (UI de saisie) + enregistrement des
     retouches.
 
@@ -80,9 +83,102 @@ def serve(port: int = typer.Option(None, help="Port d'écoute (défaut : 8765)."
     from app.serveur_config import PORT_DEFAUT
 
     port = port or PORT_DEFAUT
-    typer.secho(f"Composeur          → http://127.0.0.1:{port}/", fg=typer.colors.GREEN)
-    typer.secho(f"Retouches (API)    → http://127.0.0.1:{port}/articles/<id>/html", fg=typer.colors.BLUE)
-    uvicorn.run("app.serveur:app", host="127.0.0.1", port=port, log_level="warning")
+    typer.secho(f"Composeur          → http://{host}:{port}/", fg=typer.colors.GREEN)
+    typer.secho(f"Retouches (API)    → http://{host}:{port}/articles/<id>/html", fg=typer.colors.BLUE)
+    uvicorn.run("app.serveur:app", host=host, port=port, log_level="warning")
+
+
+# ---------------------------------------------------------------------------
+# Administration (production : `docker compose exec app python -m app.cli …`)
+# ---------------------------------------------------------------------------
+
+
+@app.command("compte-ajouter")
+def compte_ajouter(
+    identifiant: str,
+    nom: str = typer.Option("", help="Nom affiché (auteur par défaut des tutoriels)."),
+):
+    """Crée un compte, ou change le mot de passe d'un compte existant."""
+    from app import auth
+
+    mot_de_passe = typer.prompt("Mot de passe", hide_input=True, confirmation_prompt=True)
+    if len(mot_de_passe) < 10:
+        typer.secho("Mot de passe trop court (10 caractères minimum).", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    nouveau = auth.enregistrer_compte(identifiant, nom, mot_de_passe)
+    typer.secho(
+        f"Compte « {identifiant} » {'créé' if nouveau else 'mis à jour'}.", fg=typer.colors.GREEN
+    )
+
+
+@app.command("compte-supprimer")
+def compte_supprimer(identifiant: str):
+    """Supprime un compte. Ses sessions en cours cessent aussitôt d'être valides."""
+    from app import auth
+
+    if not auth.supprimer_compte(identifiant):
+        typer.secho(f"Compte « {identifiant} » introuvable.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    typer.secho(f"Compte « {identifiant} » supprimé.", fg=typer.colors.GREEN)
+
+
+@app.command("comptes")
+def comptes():
+    """Liste les comptes."""
+    from app import auth
+
+    liste = auth.charger_comptes()
+    if not liste:
+        typer.echo("Aucun compte. Créer : python -m app.cli compte-ajouter <identifiant>")
+    for c in liste.values():
+        typer.echo(f"{c.identifiant:20} {c.nom}")
+
+
+@app.command("init-vault")
+def init_vault():
+    """Prépare le dossier de données (TUTO_VAULT_DIR) au démarrage du conteneur.
+
+    Crée l'arborescence, puis synchronise `templates/` et `charte/` depuis ceux
+    livrés avec le code : dans cette version, charte et templates ne se
+    modifient pas depuis l'interface — les changer, c'est modifier le dépôt et
+    redéployer. `articles/` n'est jamais touché.
+    """
+    import shutil
+
+    from app.config import RACINE_PROJET
+    from app.storage import VAULT_ROOT
+
+    source = RACINE_PROJET / "vault-articles"
+    (VAULT_ROOT / "articles").mkdir(parents=True, exist_ok=True)
+    if source.resolve() == VAULT_ROOT.resolve():
+        typer.echo(f"Vault : {VAULT_ROOT} (celui du dépôt, rien à synchroniser)")
+        return
+    for dossier in ("templates", "charte"):
+        cible = VAULT_ROOT / dossier
+        if cible.exists():
+            shutil.rmtree(cible)
+        shutil.copytree(source / dossier, cible)
+    nb = sum(1 for d in (VAULT_ROOT / "articles").iterdir() if (d / "content.yaml").is_file())
+    typer.echo(f"Vault : {VAULT_ROOT} — templates et charte à jour, {nb} tutoriel(s).")
+
+
+@app.command("generer-tout")
+def generer_tout(skip_pdf: bool = typer.Option(False, help="Ne pas produire les PDF.")):
+    """Régénère tous les tutoriels (après un changement de charte ou de template)."""
+    ok, echecs = 0, []
+    for article_id in storage.list_article_ids():
+        try:
+            result = generate_article(article_id, skip_pdf=skip_pdf)
+        except (ContentValidationError, ValueError) as exc:
+            echecs.append(article_id)
+            typer.secho(f"✗ {article_id} : {exc}", fg=typer.colors.RED)
+            continue
+        ok += 1
+        etat = f" (PDF : {result.pdf_error})" if result.pdf_error else ""
+        typer.echo(f"✓ {article_id}{etat}")
+    typer.echo(f"{ok} tutoriel(s) régénéré(s), {len(echecs)} échec(s).")
+    if echecs:
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

@@ -25,12 +25,17 @@ from __future__ import annotations
 
 from datetime import date
 
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app import storage
+from app import journal, storage
+from app.config import REGLAGES
+from app.connexion import garde, router as connexion_router
 from app.build import generate_article
 from app.composer import UI_DIR, VAULT_MOUNT, router as composer_router
 from app.editeur import assainir_html
@@ -38,10 +43,23 @@ from app.pdf import PdfConversionError, convert_to_pdf
 from app.schemas import Calque, Retouches
 from app.serveur_config import PORT_DEFAUT  # noqa: F401 — réexport pour la CLI
 
-app = FastAPI(title="tuto-generator — composeur & enregistrement des retouches")
+journal.configurer()
+log = logging.getLogger("tuto.serveur")
+
+app = FastAPI(
+    title="tuto-generator — composeur & enregistrement des retouches",
+    # En production, la documentation de l'API n'est pas exposée.
+    docs_url=None if REGLAGES.production else "/docs",
+    redoc_url=None if REGLAGES.production else "/redoc",
+    openapi_url=None if REGLAGES.production else "/openapi.json",
+)
+
+# Garde d'accès : toutes les routes, montages statiques compris (app/connexion.py).
+app.add_middleware(BaseHTTPMiddleware, dispatch=garde)
 
 # Le composeur (UI de saisie du content.yaml) partage ce service : un seul
 # `python -m app.cli serve` sert la saisie, l'aperçu et l'enregistrement.
+app.include_router(connexion_router)
 app.include_router(composer_router)
 app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
 # Assets, polices et logo lisibles en http:// pour l'aperçu du composeur
@@ -64,14 +82,17 @@ class ChargeEnregistrement(BaseModel):
     regenerer: bool = False
 
 
-# L'aperçu est ouvert en file:// : le navigateur envoie « Origin: null ».
-# Service lié à la boucle locale uniquement (voir `python -m app.cli serve`).
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["POST", "GET"],
-    allow_headers=["*"],
-)
+# Le HTML autonome est ouvert en file:// : il appelle ce service avec
+# « Origin: null », d'où un CORS ouvert. Ce mode n'existe qu'en dev ; en
+# production l'annotation passe par le composeur, servi par ce même domaine,
+# et aucune autre origine n'a à appeler l'API.
+if REGLAGES.editeur_autonome:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["POST", "GET"],
+        allow_headers=["*"],
+    )
 
 
 def _output_dir(article_id: str):
@@ -86,6 +107,7 @@ def _output_dir(article_id: str):
 
 @app.get("/sante")
 def sante() -> dict:
+    """Healthcheck (Docker, Envoy) : public, ne révèle rien."""
     return {"ok": True}
 
 
@@ -114,7 +136,7 @@ async def enregistrer_html(article_id: str, charge: ChargeEnregistrement) -> dic
         resultat = generate_article(article_id)
         pdf_erreur = resultat.pdf_error
     else:
-        html_path.write_text(charge.html, encoding="utf-8")
+        storage.ecrire_atomique(html_path, charge.html)
         try:
             convert_to_pdf(html_path, out_dir)
         except PdfConversionError as exc:

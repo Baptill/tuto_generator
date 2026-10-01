@@ -13,7 +13,9 @@ l'utilisateur n'enregistre pas), et l'enregistrement passe par le même
 """
 from __future__ import annotations
 
+import logging
 import re
+import time
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -30,6 +32,13 @@ from app.editeur import assainir_html
 from app.renderer import render_article
 from app.schemas import Article, Calque, Retouches
 from app.validation import ContentValidationError, validate_article
+
+log = logging.getLogger("tuto.composeur")
+
+
+def _qui(request: Request) -> str:
+    compte = getattr(request.state, "compte", None)
+    return compte.identifiant if compte else "anonyme"
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -124,6 +133,7 @@ def articles() -> list[dict]:
             "titre": article.titre,
             "sections": len(article.sections),
             "statut": meta.statut if meta else "brouillon",
+            "pdf": (storage.article_output_dir(article_id) / "article.pdf").is_file(),
         })
     return out
 
@@ -155,6 +165,7 @@ def id_propose(titre: str) -> dict:
 
 @router.post("/api/articles/{article_id}/assets")
 async def televerser_image(
+    request: Request,
     article_id: str,
     fichier: UploadFile = File(...),
     template_id: str = "tuto-release",
@@ -180,7 +191,10 @@ async def televerser_image(
     while cible.exists():
         cible = assets / f"{_slug(Path(nom).stem) or 'image'}-{n}.{ext}"
         n += 1
-    cible.write_bytes(await fichier.read())
+    contenu = await fichier.read()
+    storage.ecrire_atomique(cible, contenu)
+    log.info("%s a téléversé %s dans %s (%d Ko)", _qui(request), cible.name, article_id,
+             len(contenu) // 1024)
     return {"fichier": f"assets/{cible.name}", "url": _url_asset(article_id, cible.name)}
 
 
@@ -241,7 +255,9 @@ def apercu(article_id: str, charge: ChargeArticle, request: Request) -> dict:
         retouches=_retouches_de(article_id, charge.calques),
         base_href=f"{VAULT_MOUNT}/articles/{article_id}/",
         charte_base=f"{VAULT_MOUNT}/charte/",
-        editeur_api_url=f"{str(request.base_url).rstrip('/')}/articles/{article_id}/html",
+        # Chemin relatif : résolu par le navigateur sur le domaine public, quel
+        # que soit le proxy devant le service.
+        editeur_api_url=f"/articles/{article_id}/html",
         apercu=True,
     )
     return {"html": html, "avertissements": _avertissements(article, config)}
@@ -264,7 +280,9 @@ def _avertissements(article: Article, config) -> list[str]:
 
 
 @router.post("/api/articles/{article_id}/enregistrer")
-def enregistrer(article_id: str, charge: ChargeArticle, auto: bool = False) -> dict:
+def enregistrer(
+    article_id: str, charge: ChargeArticle, request: Request, auto: bool = False
+) -> dict:
     """Écrit `content.yaml` puis relance la génération complète (HTML + PDF).
 
     Même chemin que `python -m app.cli generate` : le composeur n'est qu'une
@@ -286,12 +304,15 @@ def enregistrer(article_id: str, charge: ChargeArticle, auto: bool = False) -> d
     if not rapport.ok and not auto:
         return {"ok": False, "erreurs": rapport.errors}
 
+    debut = time.monotonic()
     storage.write_article(article)
     if charge.calques is not None:
         storage.write_retouches(article_id, _retouches_de(article_id, charge.calques))
+    mode = "auto" if auto else "manuel"
 
     if not rapport.ok:
         # Brouillon incomplet : la source est écrite, le rendu attendra.
+        log.info("%s a enregistré %s (%s, brouillon incomplet)", _qui(request), article_id, mode)
         return {
             "ok": True,
             "content": str(storage.content_path(article_id)),
@@ -305,11 +326,34 @@ def enregistrer(article_id: str, charge: ChargeArticle, auto: bool = False) -> d
     except ContentValidationError as exc:
         return {"ok": False, "erreurs": exc.errors}
 
+    duree = time.monotonic() - debut
+    if result.pdf_error:
+        log.error("PDF de %s non généré : %s", article_id, result.pdf_error)
+    log.info("%s a enregistré %s (%s, %.1f s%s)", _qui(request), article_id, mode, duree,
+             ", PDF généré" if result.pdf_path else "")
     return {
         "ok": True,
         "content": str(storage.content_path(article_id)),
         "html": str(result.html_path),
         "pdf": str(result.pdf_path) if result.pdf_path else None,
+        "pdf_url": f"/api/articles/{article_id}/pdf" if result.pdf_path else None,
         "pdf_erreur": result.pdf_error,
         "avertissements": [],
     }
+
+
+@router.get("/api/articles/{article_id}/pdf")
+def telecharger_pdf(article_id: str) -> FileResponse:
+    """Le livrable. Ouvert dans le navigateur (`inline`), qui propose de
+    l'enregistrer sous le nom du tutoriel."""
+    _valider_id(article_id)
+    pdf = storage.article_output_dir(article_id) / "article.pdf"
+    if not pdf.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="PDF pas encore généré : cliquer sur « Enregistrer & générer ».",
+        )
+    return FileResponse(
+        pdf, media_type="application/pdf", filename=f"{article_id}.pdf",
+        content_disposition_type="inline",
+    )

@@ -16,13 +16,14 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from app.editeur import editeur_html
+from app.editeur import editeur_html, modules_css_html
 from app.layouts import STRUCTURE_CSS, render_section_html
 from app.modeles import Geometrie
 from app.pagination import paginate
 from app.schemas import Article, Calque, Charte, Retouches, StyleTypo, TemplateConfig
 
-VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
+from app.storage import VAULT_ROOT, ecrire_atomique
+
 CHARTE_FONTS_DIR = VAULT_ROOT / "charte" / "fonts"
 
 A4_HEIGHT_MM = 297
@@ -214,11 +215,12 @@ def _pages_html(
 def _editeur_et_apercu(
     article_id: str, avec_editeur: bool, api_url: str | None, apercu: bool
 ) -> str:
-    """Fragment de fin de `<body>` : surface d'édition, plus le style d'aperçu
-    quand le rendu est affiché dans le composeur. Ce style est ajouté ici plutôt
-    que dans les templates pour qu'aucun template n'ait à connaître le
-    composeur."""
-    fragment = ""
+    """Fragment de fin de `<body>` : styles des calques (toujours), surface
+    d'édition (si demandée), plus le style d'aperçu quand le rendu est affiché
+    dans le composeur. Ajouté ici plutôt que dans les templates pour qu'aucun
+    template n'ait à connaître l'éditeur ni le composeur."""
+    # La surface d'édition embarque déjà les styles des calques.
+    fragment = "" if avec_editeur else modules_css_html()
     if avec_editeur:
         fragment += editeur_html(
             article_id=article_id,
@@ -278,6 +280,5 @@ def render_article(
     )
 
     if output_path is not None:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(html, encoding="utf-8")
+        ecrire_atomique(output_path, html)
     return html

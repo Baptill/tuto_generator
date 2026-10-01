@@ -318,3 +318,33 @@ svg.wireframe .wf-encadre { fill: #eef0f3; stroke: #b9c0c8; stroke-width: 0.6; }
 .uploader.item { align-items: flex-start; }
 .uploader.item .vignette { width: 44px; height: 44px; }
 .ligne-icone { display: flex; gap: 10px; align-items: center; }
+
+/* ------------------------------------------------------------- connexion */
+.page-connexion { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.carte-connexion {
+  width: min(380px, calc(100vw - 32px));
+  background: var(--gris-0); border: 1px solid var(--gris-3);
+  border-radius: 12px; box-shadow: var(--ombre); padding: 26px 26px 22px;
+}
+.carte-connexion h1 { font-size: 18px; margin: 0 0 4px; }
+.carte-connexion .aide { margin: 0 0 18px; }
+.carte-connexion input { font: inherit; width: 100%; padding: 8px 10px; margin-top: 4px;
+  border: 1px solid var(--gris-3); border-radius: var(--rayon); }
+.carte-connexion button { width: 100%; margin-top: 6px; padding: 9px 12px; }
+.erreur-connexion {
+  margin: 0 0 14px; padding: 8px 11px; font-size: 13px;
+  border: 1px solid #e3b2ab; background: #fdecea; border-radius: var(--rayon);
+}
+
+.utilisateur { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--gris-6); }
+.utilisateur form { margin: 0; }
+.utilisateur button { padding: 5px 10px; font-size: 12px; }
+.avertissements a.telecharger { font-weight: 600; color: var(--accent); }
+a.bouton {
+  font: inherit; font-size: 14px; text-decoration: none; color: inherit;
+  border: 1px solid var(--gris-3); border-radius: var(--rayon);
+  background: var(--gris-0); padding: 7px 12px; white-space: nowrap;
+}
+a.bouton:hover { background: var(--gris-1); }
+a.bouton[hidden] { display: none; }
+.utilisateur[hidden] { display: none; }

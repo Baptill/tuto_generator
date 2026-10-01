@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connexion — Composeur de tutoriels</title>
+    <link rel="stylesheet" href="/ui/composeur.css" />
+  </head>
+  <body class="page-connexion">
+    <main class="carte-connexion">
+      <h1>Composeur de tutoriels</h1>
+      <p class="aide">Connecte-toi pour accéder aux tutoriels de l'équipe.</p>
+      <p id="erreur" class="erreur-connexion" hidden>Identifiant ou mot de passe incorrect.</p>
+      <form method="post" action="/connexion">
+        <label>Identifiant
+          <input name="identifiant" type="text" autocomplete="username" required autofocus />
+        </label>
+        <label>Mot de passe
+          <input name="mot_de_passe" type="password" autocomplete="current-password" required />
+        </label>
+        <input id="suite" name="suite" type="hidden" value="/" />
+        <button type="submit" class="primaire">Se connecter</button>
+      </form>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      document.getElementById("erreur").hidden = !params.has("erreur");
+      document.getElementById("suite").value = params.get("suite") || "/";
+    </script>
+  </body>
+</html>

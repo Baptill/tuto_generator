@@ -1,0 +1,21 @@
+# Déploiement du composeur de tutoriels (voir DEPLOIEMENT.md).
+services:
+  app:
+    build: .
+    image: tuto-generator:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Tutoriels, images, annotations et comptes : la seule chose à sauvegarder.
+      - ./data:/data
+    ports:
+      # Joignable uniquement depuis la machine : c'est Envoy qui l'expose, en
+      # HTTPS, sur le sous-domaine. Adapter si Envoy tourne dans un conteneur
+      # (voir DEPLOIEMENT.md, « Brancher Envoy »).
+      - "127.0.0.1:8000:8000"
+    logging:
+      # Rotation des logs : sans elle, le fichier de logs Docker grossit sans fin.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

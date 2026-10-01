@@ -1,0 +1,50 @@
+# Fragment de configuration Envoy (API v3) pour publier le composeur sur un
+# sous-domaine. À fusionner dans la configuration Envoy existante du VPS : seuls
+# le virtual host et le cluster sont propres à l'application ; l'écoute HTTPS,
+# le certificat TLS et le filtre http_connection_manager existent déjà.
+#
+# Remplacer tutos.exemple.fr par le sous-domaine retenu.
+
+# 1) Dans route_config.virtual_hosts du listener HTTPS :
+virtual_hosts:
+  - name: tuto_generator
+    domains: ["tutos.exemple.fr"]
+    routes:
+      - match: { prefix: "/" }
+        route:
+          cluster: tuto_generator
+          # « Enregistrer & générer » produit le PDF dans la requête : quelques
+          # secondes, davantage pour un long tutoriel. Le défaut d'Envoy (15 s)
+          # est trop juste.
+          timeout: 120s
+
+# 2) Dans http_connection_manager (souvent déjà le cas) : Envoy ajoute
+#    l'IP du visiteur dans X-Forwarded-For et le schéma dans
+#    X-Forwarded-Proto, que l'application lit (uvicorn --proxy-headers).
+#
+#    use_remote_address: true
+#    xff_num_trusted_hops: 0
+
+# 3) Dans static_resources.clusters :
+clusters:
+  - name: tuto_generator
+    type: STRICT_DNS
+    connect_timeout: 5s
+    load_assignment:
+      cluster_name: tuto_generator
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    # Envoy sur l'hôte : 127.0.0.1 (port publié par
+                    # docker-compose.yml). Envoy dans un conteneur sur le même
+                    # réseau Docker : le nom du service, « app ».
+                    address: 127.0.0.1
+                    port_value: 8000
+    health_checks:
+      - timeout: 5s
+        interval: 30s
+        unhealthy_threshold: 3
+        healthy_threshold: 1
+        http_health_check: { path: "/sante" }

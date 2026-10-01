@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app import storage
+from app.config import REGLAGES
 from app.pdf import PdfConversionError, convert_to_pdf
 from app.renderer import render_article
 from app.validation import validate_article
@@ -47,6 +48,9 @@ def generate_article(article_id: str, skip_pdf: bool = False) -> BuildResult:
         # Les calques posés dans l'éditeur survivent à la régénération : ils
         # sont une source à part, ancrée aux sections (CLAUDE.md §3).
         retouches=storage.load_retouches(article_id),
+        # En production, le HTML produit n'embarque pas la barre d'édition :
+        # l'annotation se fait dans le composeur (voir app/config.py).
+        avec_editeur=REGLAGES.editeur_autonome,
     )
 
     pdf_path: Path | None = None

@@ -169,6 +169,11 @@ function chargerArticle(contenu) {
 
 async function api(url, options) {
   const rep = await fetch(url, options);
+  if (rep.status === 401) {
+    // Session expirée ou révoquée : retour à la connexion, puis ici.
+    location.href = "/connexion?suite=/";
+    throw new Error("Session expirée : reconnexion…");
+  }
   if (!rep.ok) {
     const corps = await rep.json().catch(() => ({}));
     const detail = corps.detail;
@@ -908,10 +913,11 @@ async function enregistrer() {
       idFige = true;
       modifie = false;
       etatSauvegarde("enregistré et généré");
-      const messages = [`content.yaml et HTML écrits — ${res.html}`];
-      if (res.pdf) messages.push(`PDF : ${res.pdf}`);
+      const messages = ["Contenu et annotations enregistrés."];
+      if (res.pdf_url) messages.push("PDF à jour : bouton « Voir le PDF » en haut à droite.");
       if (res.pdf_erreur) messages.push(`PDF non généré : ${res.pdf_erreur}`);
-      afficherAvertissements(messages, "succes");
+      afficherAvertissements(messages, res.pdf_erreur ? "erreur" : "succes");
+      afficherLienPdf(Boolean(res.pdf_url));
       await chargerListeArticles();
       $("#choix-article").value = etat.id;
     }
@@ -933,9 +939,28 @@ async function chargerCatalogue(templateId) {
 }
 
 const VALEUR_NOUVEAU = "__nouveau__";
+let LISTE = [];       // tutoriels existants (id, titre, pdf disponible…)
+let MOI = { auth: false, nom: null };
+
+/** Bouton « Voir le PDF » : visible dès qu'un PDF a été généré pour le
+ *  tutoriel courant. */
+function afficherLienPdf(disponible) {
+  const lien = $("#lien-pdf");
+  lien.hidden = !disponible || !etat.id;
+  // Paramètre anti-cache : le navigateur rouvre toujours la dernière version.
+  if (!lien.hidden) lien.href = `/api/articles/${etat.id}/pdf?v=${Date.now()}`;
+}
+
+async function chargerUtilisateur() {
+  MOI = await api("/api/moi");
+  if (!MOI.auth) return;
+  $("#nom-utilisateur").textContent = MOI.nom;
+  $("#utilisateur").hidden = false;
+}
 
 async function chargerListeArticles() {
   const liste = await api("/api/articles");
+  LISTE = liste;
   const choix = $("#choix-article");
   choix.innerHTML = "";
   choix.append(new Option("+ Nouveau tutoriel", VALEUR_NOUVEAU));
@@ -950,7 +975,10 @@ function nouveauTutoriel() {
   modifie = false;
   apercuArticleId = apercuArticleIdAttendu = null;
   etatSauvegarde("");
+  // L'auteur d'un nouveau tutoriel est l'utilisateur connecté (modifiable).
+  etat.auteur = MOI.nom || "";
   $("#choix-article").value = VALEUR_NOUVEAU;
+  afficherLienPdf(false);
   rendreTout();
   $("#f-titre").focus();
 }
@@ -977,8 +1005,10 @@ function appliquerZoom() {
 }
 
 async function demarrer() {
+  await chargerUtilisateur();
   await chargerCatalogue("tuto-release");
   await chargerListeArticles();
+  etat.auteur = MOI.nom || "";
 
   brancherEntete();
   $("#btn-ajouter-section").addEventListener("click", ouvrirCatalogue);
@@ -994,6 +1024,7 @@ async function demarrer() {
     modifie = false;
     etatSauvegarde("");
     chargerArticle(contenu);
+    afficherLienPdf(Boolean(LISTE.find((a) => a.id === contenu.id)?.pdf));
   });
   document.querySelectorAll("[data-fermer]").forEach((el) => el.addEventListener("click", fermerCatalogue));
   document.addEventListener("keydown", (ev) => {

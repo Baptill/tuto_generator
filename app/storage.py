@@ -6,14 +6,37 @@ Règle d'or : `content.yaml` + `meta.yaml` suffisent à tout reconstruire.
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 from datetime import date
 from pathlib import Path
 
 import yaml
 
+from app.config import REGLAGES
 from app.schemas import Article, Charte, Meta, Retouches, TemplateConfig
 
-VAULT_ROOT = Path(__file__).resolve().parent.parent / "vault-articles"
+# Racine des données : `vault-articles/` du dépôt en dev, le volume monté en
+# production (TUTO_VAULT_DIR). Seul endroit où ce chemin est défini.
+VAULT_ROOT = REGLAGES.vault_dir
+
+
+def ecrire_atomique(path: Path, donnees: str | bytes) -> None:
+    """Écrit `path` d'un bloc : fichier temporaire dans le même dossier, puis
+    renommage. Un plantage en cours d'écriture laisse l'ancienne version
+    intacte, jamais un fichier tronqué."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(donnees.encode("utf-8") if isinstance(donnees, str) else donnees)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def article_dir(article_id: str) -> Path:
@@ -79,9 +102,7 @@ _Dumper.add_representer(str, _representer_str)
 
 
 def _dump_yaml(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        yaml.dump(data, f, Dumper=_Dumper, allow_unicode=True, sort_keys=False)
+    ecrire_atomique(path, yaml.dump(data, Dumper=_Dumper, allow_unicode=True, sort_keys=False))
 
 
 def load_article(article_id: str) -> tuple[Article, bytes]:

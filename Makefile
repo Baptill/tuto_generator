@@ -18,7 +18,7 @@ venv: $(VENV)/bin/python ## Crée l'environnement virtuel
 
 install: venv ## Installe les dépendances Python dans .venv
 	$(PIP) install -q --upgrade pip
-	$(PIP) install -q -r requirements.txt
+	$(PIP) install -q -r requirements-dev.txt
 
 test: install ## Lance la suite de tests
 	$(PYTHON) -m pytest tests/ -q

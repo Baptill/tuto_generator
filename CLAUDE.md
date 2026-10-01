@@ -31,6 +31,9 @@ content.yaml + template.html + charte.yaml  →  [Moteur de rendu HTML/CSS]  →
 | Conversion HTML → PDF | **WeasyPrint** (pur Python, CSS paged-media) | Pas de navigateur ni de LibreOffice à installer ; tourne tel quel sur serveur Linux ; polices via `@font-face` |
 | Surface d'édition | HTML `contenteditable` dans le navigateur | Retouche libre (texte **et** ajout d'éléments) sans régénérer ; remplace l'édition Word |
 | Backend / API | FastAPI | — |
+| Authentification | Comptes locaux (fichier YAML, scrypt) + cookie de session signé HMAC | Petite équipe interne : pas d'inscription ni de rôles, aucune dépendance ajoutée |
+| Déploiement | Docker Compose derrière Envoy (HTTPS), volume `./data` | Voir `DEPLOIEMENT.md` |
+| Intégration continue | GitHub Actions (`.github/workflows/tests.yml`) | Tests à chaque push sur `master` et sur chaque pull request qui la vise, dans le même environnement que l'image de prod (Python 3.13, Pango/HarfBuzz) |
 | Tâches longues (synchro, IA) | Worker (RQ / Celery / arq) | Ne pas bloquer l'UI sur 200 articles |
 | Stockage du contenu | Dépôt Git (GitHub) | Historique, diff, rollback, traçabilité gratuits |
 | Index / recherche (Étape 5) | SQLite + embeddings légers (`sqlite-vec`) | Volume = centaines d'articles, pas besoin de plus lourd |
@@ -57,7 +60,7 @@ Trois règles gouvernent cette surface :
 
 Depuis l'aperçu du composeur, l'enregistrement bascule en mode **`regenerer`** : le document affiché y est un rendu de travail (URL `http://`, texte piloté par le formulaire) qu'il ne faut pas figer dans `output/`. Seuls les calques sont alors persistés, et l'artefact est **reconstruit depuis `content.yaml` + `retouches.yaml`** — chemins locaux, PDF correct, annotations conservées.
 
-Le chrome de l'éditeur (barre, palette, poignées) reprend les jetons visuels du composeur — gris, accent, rayons, ombres — portés par les éléments de chrome et non par `:root`, pour ne pas se mêler aux variables `--couleur-*` de la charte, qui habillent le document. Dans l'aperçu du composeur, la barre se réduit à « Mode édition » et « Annuler » : c'est « Enregistrer & générer » qui écrit la source *et* les calques. Le HTML autonome conserve son bouton « Enregistrer HTML » — c'est sa seule voie de persistance.
+Le chrome de l'éditeur (barre, palette, poignées) reprend les jetons visuels du composeur — gris, accent, rayons, ombres — portés par les éléments de chrome et non par `:root`, pour ne pas se mêler aux variables `--couleur-*` de la charte, qui habillent le document. Dans l'aperçu du composeur, la barre se réduit à « Mode édition » et « Annuler » : c'est « Enregistrer & générer » qui écrit la source *et* les calques. Le HTML autonome conserve son bouton « Enregistrer HTML » — c'est sa seule voie de persistance. **Ce mode autonome n'existe qu'en dev** : en production, le HTML produit n'embarque plus la barre d'édition (seulement les styles des calques, `modules_css_html`, indispensables à leur rendu) et l'annotation se fait exclusivement dans le composeur.
 
 **Les calques survivent aux régénérations.** L'enregistrement les persiste dans `retouches.yaml` (une **source**, versionnée dans Git au même titre que `content.yaml` — pas un artefact), et le moteur de rendu les réinjecte à chaque build. Un calque est ancré à sa **section** (`ancre_section`, l'`id` du `content.yaml`) plutôt qu'à une page : si un changement de charte déplace la section sur une autre feuille, le calque la suit. Les calques posés hors section (en-tête, marge) sont ancrés à l'index de page ; ceux dont l'ancre a disparu sont reversés sur la dernière page plutôt que perdus. Cela tranche partiellement le point ouvert §7 : les **ajouts** remontent bien dans une source durable, mais les **modifications de texte dans le flux** ne sont toujours pas reprises (elles appartiennent à `content.yaml`) — d'où le marqueur `meta.retouche_html_le`, effacé à la génération suivante, qui alimentera l'avertissement de re-synchro de l'Étape 2.
 
@@ -117,6 +120,16 @@ document (variable CSS `--apercu-zoom`) et non à l'`<iframe>`, pour que la
 palette garde sa taille native. L'aperçu se fige tant que le mode édition est
 actif : une frappe dans le formulaire ne peut donc pas effacer des calques non
 enregistrés.
+
+### Production : configuration, accès, données
+
+Le procédé complet est dans `DEPLOIEMENT.md`. Les principes :
+
+- **Deux modes, un seul code** (`app/config.py`). Par défaut, *dev* : comportement local historique (pas de connexion, vault du dépôt, HTML autonome). `TUTO_ENV=production` active la connexion obligatoire, exige `TUTO_SECRET_KEY`, retire `/docs`, le CORS et la barre d'édition du HTML produit. Chaque réglage vient de l'environnement ; le chemin des données n'est défini qu'à un endroit (`storage.VAULT_ROOT`).
+- **Accès** (`app/auth.py`, `app/connexion.py`) : un middleware protège toutes les routes, fichiers bruts `/vault` compris ; seuls `/connexion`, `/sante` et le code statique `/ui` sont publics. Comptes créés en ligne de commande (`admin compte-ajouter`), rangés hors du vault. L'utilisateur connecté est l'auteur par défaut d'un nouveau tutoriel, et figure dans les logs.
+- **Données** : un volume `./data` = `vault/` (tutoriels) + `comptes.yaml`, sauvegardé chaque nuit par `deploy/sauvegarde.sh`. L'image n'embarque aucun tutoriel ; `templates/` et `charte/` y sont livrés avec le code et recopiés dans le volume à chaque démarrage (`init-vault`) — les modifier, c'est modifier le dépôt et redéployer. Toutes les écritures sont **atomiques** (`storage.ecrire_atomique` : temporaire puis renommage), PDF compris.
+- **Livrable** : le PDF se consulte et se télécharge depuis le composeur (`/api/articles/<id>/pdf`) ; les chemins disque du serveur ne sont plus montrés.
+- **Logs** : une ligne par événement sur la sortie standard (`app/journal.py`) — connexions, enregistrements avec durée, téléversements, échecs de génération.
 
 ### Sections modulaires : grille de page en 4 hauteurs
 
@@ -234,6 +247,7 @@ Index vectoriel (SQLite + `sqlite-vec`) des articles existants (site + vault) po
 - Liste exacte des types d'encadrés (astuce, attention…) et leur charte visuelle précise.
 - Modèle d'édition navigateur : retouches finales **jetables** (retenu) vs option d'**ajout remonté dans `content.yaml`** (survit aux régénérations) ; catalogue exact des éléments insérables dans l'éditeur `contenteditable`.
 - Composeur : réordonnancement des sections par glisser-déposer (aujourd'hui ↑/↓), et choix du template à la création (aujourd'hui `tuto-release` par défaut).
+- Production, volontairement reporté (usage interne à 2 personnes) : détection des conflits d'édition simultanée (le dernier enregistrement l'emporte ; `meta.hash_contenu` permettrait une version optimiste), contrôle du contenu et de la taille des images téléversées, nettoyage du HTML des calques par liste blanche (`nh3`) plutôt que par expressions régulières. À faire avant toute ouverture au-delà de l'équipe.
 - Catalogue des modèles : le registre est global (tous les templates voient les 33 modèles). À trancher si un template doit en restreindre la liste — `config.yaml` porterait alors les identifiants autorisés.
 - Spécification de l'API du site maison (endpoints, format, auth) — à caler avec l'équipe web.
 - Fournisseur de génération d'images IA et licences associées.
@@ -246,4 +260,6 @@ saisie assistée du `content.yaml` (wireframes + poids + aperçu live annotable,
 automatique), servie par le même `python -m app.cli serve` que l'enregistrement des retouches.
 **Catalogue de modèles (2026-09-23)** : registre déclaratif de 33 modèles × 4 poids, moteur de rendu
 unique à géométrie en mm, images sans déformation avec padding, encarts dans tous les modèles,
-liens et listes numérotées dans le texte. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.
+liens et listes numérotées dans le texte. **Prêt pour la production (2026-09-30)** : image Docker
+(WeasyPrint, non-root), connexion obligatoire, volume de données sauvegardé, écritures atomiques,
+téléchargement du PDF, logs — procédure dans `DEPLOIEMENT.md`. **Pivot moteur (2026-07-08)** : abandon de `docxtpl`/Word au profit d'un moteur **HTML/CSS + WeasyPrint**, motivé par le plafond de mise en page de Word (séparateurs, liserés, labels, centrage). Le principe « le document est un build » est conservé ; le HTML devient l'artefact éditable (navigateur, `contenteditable`) en plus du PDF.

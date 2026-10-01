@@ -33,3 +33,11 @@ __pycache__/
 ### Artefacts régénérables (jamais versionnés) ###
 vault-articles/articles/*/output/
 vault-articles/_index/registry.sqlite
+
+### Déploiement ###
+# Comptes (dev) et secrets : jamais versionnés.
+.comptes.yaml
+.env
+# Données de production montées dans le conteneur (tutoriels, comptes).
+data/
+sauvegardes/

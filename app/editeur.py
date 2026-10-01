@@ -737,6 +737,16 @@ _SCRIPT = r"""
 """
 
 
+def modules_css_html() -> str:
+    """Styles des calques et verrou de hauteur des pages, seuls.
+
+    Indispensables au *rendu* des annotations — donc aussi dans un HTML produit
+    sans barre d'édition (production). Sans eux, une pastille posée sur une
+    capture retombe en simple texte dans le flux de la section.
+    """
+    return f'<style id="modules-css">{_MODULES_CSS}</style>'
+
+
 def editeur_html(
     article_id: str,
     port: int | None = None,
@@ -773,7 +783,7 @@ def editeur_html(
     )
     return (
         f'<style id="editeur-css">{_EDITEUR_CSS}</style>\n'
-        f'<style id="modules-css">{_MODULES_CSS}</style>\n'
+        f"{modules_css_html()}\n"
         '<div class="editor-bar">'
         '<button id="btn-edit" onclick="toggleEdit(this)">✏️ Mode édition</button>'
         '<button id="btn-annuler" onclick="annulerAction()" disabled>↩ Annuler</button>'
